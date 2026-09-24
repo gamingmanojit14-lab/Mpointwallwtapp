@@ -1,0 +1,39 @@
+{
+  "name": "P2P Wallet",
+  "short_name": "P2P Wallet",
+  "description": "Peer-to-peer points wallet powered by Firebase",
+  "start_url": "/dashboard.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#F7931A",
+  "lang": "bn",
+  "categories": ["finance", "utilities"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%23F7931A'/%3E%3Ctext x='50%25' y='55%25' text-anchor='middle' dominant-baseline='middle' font-size='120' font-family='Arial' font-weight='bold' fill='%230f172a'%3E₿%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%23F7931A'/%3E%3Ctext x='50%25' y='55%25' text-anchor='middle' dominant-baseline='middle' font-size='320' font-family='Arial' font-weight='bold' fill='%230f172a'%3E₿%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Send",
+      "url": "/send.html",
+      "description": "Send points"
+    },
+    {
+      "name": "Receive",
+      "url": "/receive.html",
+      "description": "Show your QR to receive"
+    }
+  ]
+}
