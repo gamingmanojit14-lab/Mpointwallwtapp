@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Admin · P2P Wallet</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+</head>
+<body class="min-h-screen pb-24">
+
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+    <div class="max-w-4xl mx-auto flex items-center justify-between px-4 py-3">
+      <div class="flex items-center gap-3">
+        <a href="dashboard.html" class="text-slate-400 hover:text-orange-400">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+        </a>
+        <h1 class="font-bold text-lg flex items-center gap-2">🛡️ Admin Panel</h1>
+      </div>
+      <span id="adminEmail" class="text-xs text-slate-500 hidden sm:inline">—</span>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 pb-3 overflow-x-auto">
+      <div class="flex gap-2 min-w-max">
+        <button data-tab="overview" class="adminTab px-4 py-2 rounded-lg text-sm font-medium bg-orange-500 text-slate-900">Overview</button>
+        <button data-tab="integrations" class="adminTab px-4 py-2 rounded-lg text-sm font-medium text-slate-400">🔗 Integrations</button>
+        <button data-tab="users" class="adminTab px-4 py-2 rounded-lg text-sm font-medium text-slate-400">Users</button>
+        <button data-tab="wallets" class="adminTab px-4 py-2 rounded-lg text-sm font-medium text-slate-400">Wallets</button>
+        <button data-tab="issue" class="adminTab px-4 py-2 rounded-lg text-sm font-medium text-slate-400">Issue Points</button>
+        <button data-tab="config" class="adminTab px-4 py-2 rounded-lg text-sm font-medium text-slate-400">Config</button>
+        <button data-tab="logs" class="adminTab px-4 py-2 rounded-lg text-sm font-medium text-slate-400">Logs</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+
+    <!-- ============ OVERVIEW ============ -->
+    <section data-panel="overview">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="card p-4">
+          <p class="text-xs text-slate-400 uppercase">Total Users</p>
+          <p id="statUsers" class="text-2xl font-bold mt-1 mono">—</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-xs text-slate-400 uppercase">Total Wallets</p>
+          <p id="statWallets" class="text-2xl font-bold mt-1 mono">—</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-xs text-slate-400 uppercase">Transactions</p>
+          <p id="statTx" class="text-2xl font-bold mt-1 mono">—</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-xs text-slate-400 uppercase">Integrations</p>
+          <p id="statIntegrations" class="text-2xl font-bold mt-1 mono">—</p>
+        </div>
+      </div>
+      <div class="card p-4 mt-3">
+        <p class="text-xs text-slate-400 uppercase">Total Points in Circulation</p>
+        <p id="statSupply" class="text-3xl font-bold mt-1 mono text-orange-500">—</p>
+      </div>
+    </section>
+
+    <!-- ============ INTEGRATIONS ============ -->
+    <section data-panel="integrations" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-lg">🔗 Merchant Integrations</h2>
+        <button id="btnAddIntegration" class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold">+ Add New</button>
+      </div>
+      <div id="integrationsList" class="space-y-3">
+        <div class="text-slate-500 text-sm text-center py-8 card">No integrations yet</div>
+      </div>
+    </section>
+
+    <!-- ============ USERS ============ -->
+    <section data-panel="users" class="hidden">
+      <div class="card p-3 mb-3">
+        <input id="userSearch" type="text" placeholder="Search by email / name / wallet"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500" />
+      </div>
+      <div id="usersList" class="space-y-2">
+        <div class="text-slate-500 text-sm text-center py-8">Loading…</div>
+      </div>
+    </section>
+
+    <!-- ============ WALLETS ============ -->
+    <section data-panel="wallets" class="hidden">
+      <div class="card p-3 mb-3">
+        <input id="walletSearch" type="text" placeholder="Search wallet ID / name"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500" />
+      </div>
+      <div id="walletsList" class="space-y-2">
+        <div class="text-slate-500 text-sm text-center py-8">Loading…</div>
+      </div>
+    </section>
+
+    <!-- ============ ISSUE POINTS ============ -->
+    <section data-panel="issue" class="hidden">
+      <div class="card p-5 space-y-3 max-w-lg">
+        <h3 class="font-semibold">Issue / Burn Points</h3>
+        <p class="text-xs text-slate-400">Manually credit or debit a wallet (admin action; logged in adminLedger).</p>
+        <div>
+          <label class="text-sm block mb-1">Wallet ID</label>
+          <input id="issueWallet" type="text" placeholder="W-XXXXXX"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
+        </div>
+        <div>
+          <label class="text-sm block mb-1">Amount</label>
+          <input id="issueAmount" type="number" min="0.01" step="0.01"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
+        </div>
+        <div>
+          <label class="text-sm block mb-1">Type</label>
+          <select id="issueType" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500">
+            <option value="credit">Credit (+)</option>
+            <option value="debit">Debit (−)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm block mb-1">Note</label>
+          <input id="issueNote" type="text" maxlength="100"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500" />
+        </div>
+        <button id="btnIssue" class="btn-primary w-full py-3 rounded-xl font-semibold">Apply</button>
+      </div>
+    </section>
+
+    <!-- ============ CONFIG ============ -->
+    <section data-panel="config" class="hidden">
+      <div class="card p-5 space-y-3 max-w-lg">
+        <h3 class="font-semibold">Global Config</h3>
+        <div>
+          <label class="text-sm block mb-1">App Name</label>
+          <input id="cfgAppName" type="text"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500" />
+        </div>
+        <div>
+          <label class="text-sm block mb-1">Max Transfer (per tx)</label>
+          <input id="cfgMaxTx" type="number"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
+        </div>
+        <div>
+          <label class="text-sm block mb-1">Signup Bonus (points)</label>
+          <input id="cfgBonus" type="number" step="0.01"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input id="cfgSignupOpen" type="checkbox" class="w-4 h-4" />
+          Open Signups
+        </label>
+        <button id="btnSaveConfig" class="btn-primary w-full py-3 rounded-xl font-semibold">Save Config</button>
+      </div>
+    </section>
+
+    <!-- ============ LOGS ============ -->
+    <section data-panel="logs" class="hidden">
+      <div class="card p-3 mb-3 flex gap-2 items-center">
+        <select id="logShopFilter" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none">
+          <option value="">All integrations</option>
+        </select>
+        <button id="btnReloadLogs" class="bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-sm">Reload</button>
+      </div>
+      <div id="logsList" class="space-y-1">
+        <div class="text-slate-500 text-sm text-center py-8">Loading…</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ ADD INTEGRATION MODAL ============ -->
+  <div id="intModal" class="hidden fixed inset-0 z-50 bg-black/70 items-center justify-center p-4 overflow-y-auto">
+    <div class="card p-6 w-full max-w-md space-y-3 my-8">
+      <h3 id="intModalTitle" class="font-bold text-lg">Add New Integration</h3>
+
+      <div>
+        <label class="text-sm block mb-1">Shop Name *</label>
+        <input id="intShopName" type="text" placeholder="Sri Krishna Fastfood" maxlength="60"
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500" />
+      </div>
+
+      <div>
+        <label class="text-sm block mb-1">Shop ID * <span class="text-slate-500 text-xs">(paste from TextilePOS)</span></label>
+        <input id="intShopId" type="text" placeholder="SHOP-A3K9Q7" maxlength="40"
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
+      </div>
+
+      <div>
+        <label class="text-sm block mb-1">Secret Code</label>
+        <div class="flex gap-2">
+          <input id="intSecret" type="text" placeholder="sk_live_..." 
+            class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
+          <button id="btnGenSecret" type="button" class="bg-slate-800 border border-slate-700 rounded-xl px-3 hover:border-orange-500 text-sm">Generate</button>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Leave blank to auto-generate a new secret code.</p>
+      </div>
+
+      <div>
+        <label class="text-sm block mb-1">Webhook URL (optional)</label>
+        <input id="intWebhook" type="url" placeholder="https://..."
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500" />
+      </div>
+
+      <div class="flex gap-3">
+        <label class="flex items-center gap-2 text-sm flex-1">
+          <input id="intAutoDebit" type="checkbox" checked class="w-4 h-4" />
+          Auto Debit
+        </label>
+        <label class="flex items-center gap-2 text-sm flex-1">
+          <input id="intAutoCredit" type="checkbox" checked class="w-4 h-4" />
+          Auto Credit
+        </label>
+      </div>
+
+      <div id="intModalError" class="hidden text-red-400 text-xs"></div>
+
+      <div class="flex gap-2 pt-2">
+        <button id="intCancel" class="flex-1 bg-slate-800 hover:bg-slate-700 rounded-xl py-3 text-sm">Cancel</button>
+        <button id="intSave" class="flex-1 btn-primary rounded-xl py-3 text-sm font-semibold">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SECRET SHOWN MODAL ============ -->
+  <div id="secretModal" class="hidden fixed inset-0 z-50 bg-black/80 items-center justify-center p-4">
+    <div class="card p-6 w-full max-w-md">
+      <h3 class="font-bold text-lg text-orange-400">⚠️ Save this secret now</h3>
+      <p class="text-sm text-slate-400 mt-2">This plaintext secret will NOT be shown again. Copy it into TextilePOS immediately.</p>
+      <div class="mt-4 bg-slate-900 rounded-xl p-4 border border-slate-700">
+        <p id="shownSecret" class="mono text-sm break-all text-orange-300"></p>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button id="secretCopy" class="flex-1 btn-primary rounded-xl py-3 text-sm font-semibold">Copy</button>
+        <button id="secretDone" class="flex-1 bg-slate-800 hover:bg-slate-700 rounded-xl py-3 text-sm">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let CURRENT_ADMIN_UID = null;
+    let editingShopId = null; // null = create, else = edit
+
+    // ---------- Helpers ----------
+    async function sha256Hex(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function generateSecret() {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let s = 'sk_live_';
+      const bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      for (let i = 0; i < 32; i++) s += chars[bytes[i] % chars.length];
+      return s;
+    }
+
+    function generateWalletId(prefix = 'M-') {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let s = prefix;
+      const bytes = new Uint8Array(6);
+      crypto.getRandomValues(bytes);
+      for (let i = 0; i < 6; i++) s += chars[bytes[i] % chars.length];
+      return s;
+    }
+
+    function hintFor(code) {
+      if (!code || code.length < 8) return code || '';
+      return code.slice(0, 12) + '***' + code.slice(-4);
+    }
+
+    function timeAgo(ts) {
+      if (!ts) return 'never';
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      const s = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (s < 60) return s + 's ago';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    }
+
+    // ---------- Tabs ----------
+    document.querySelectorAll('.adminTab').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.adminTab').forEach((x) => {
+          x.classList.remove('bg-orange-500', 'text-slate-900');
+          x.classList.add('text-slate-400');
+        });
+        b.classList.add('bg-orange-500', 'text-slate-900');
+        b.classList.remove('text-slate-400');
+
+        document.querySelectorAll('[data-panel]').forEach((p) => p.classList.add('hidden'));
+        const name = b.dataset.tab;
+        document.querySelector(`[data-panel="${name}"]`).classList.remove('hidden');
+
+        if (name === 'overview') loadOverview();
+        if (name === 'integrations') loadIntegrations();
+        if (name === 'users') loadUsers();
+        if (name === 'wallets') loadWallets();
+        if (name === 'config') loadConfig();
+        if (name === 'logs') loadLogs();
+      });
+    });
+
+    // ---------- Overview ----------
+    async function loadOverview() {
+      try {
+        const [uSnap, wSnap, tSnap, iSnap, wAll] = await Promise.all([
+          db.collection('users').count().get(),
+          db.collection('wallets').count().get(),
+          db.collection('transactions').count().get(),
+          db.collection('config').doc('integrations').collection('list').count().get(),
+          db.collection('wallets').get(),
+        ]);
+        document.getElementById('statUsers').textContent = uSnap.data().count;
+        document.getElementById('statWallets').textContent = wSnap.data().count;
+        document.getElementById('statTx').textContent = tSnap.data().count;
+        document.getElementById('statIntegrations').textContent = iSnap.data().count;
+
+        let total = 0;
+        wAll.forEach((d) => { total += Number(d.data().balance || 0); });
+        document.getElementById('statSupply').textContent = fmtPoints(total);
+      } catch (e) {
+        console.error(e);
+        toast(e.message, 'error');
+      }
+    }
+
+    // ---------- Integrations ----------
+    async function loadIntegrations() {
+      const wrap = document.getElementById('integrationsList');
+      wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">Loading…</div>';
+      try {
+        const snap = await db.collection('config').doc('integrations').collection('list').get();
+        if (snap.empty) {
+          wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">No integrations yet. Click "+ Add New" to create one.</div>';
+          return;
+        }
+        wrap.innerHTML = snap.docs.map((d) => {
+          const x = d.data();
+          const status = x.status === 'active' ? 'text-green-400' : 'text-red-400';
+          const statusIcon = x.status === 'active' ? '✅' : '⏸️';
+          return `
+            <div class="card p-4">
+              <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div class="min-w-0 flex-1">
+                  <p class="font-semibold truncate">🏪 ${x.shopName || '(unnamed)'}</p>
+                  <p class="text-xs text-slate-400 mt-0.5">Shop ID: <span class="mono">${d.id}</span></p>
+                  <p class="text-xs text-slate-400">Merchant Wallet: <span class="mono text-orange-400">${x.merchantWalletId || '—'}</span></p>
+                  <p class="text-xs text-slate-400">Secret: <span class="mono">${x.secretCodeHint || '—'}</span></p>
+                </div>
+                <div class="text-right shrink-0">
+                  <p class="${status} text-sm font-medium">${statusIcon} ${x.status}</p>
+                  <p class="text-xs text-slate-500 mt-1">Auto-D: ${x.allowAutoDebit ? '✅' : '❌'} · Auto-C: ${x.allowAutoCredit ? '✅' : '❌'}</p>
+                  <p class="text-xs text-slate-500">Used: ${timeAgo(x.lastUsedAt)}</p>
+                </div>
+              </div>
+              <div class="flex gap-2 mt-3 flex-wrap">
+                <button data-act="edit" data-shop="${d.id}" class="intAct bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs">✏️ Edit</button>
+                <button data-act="regen" data-shop="${d.id}" class="intAct bg-slate-800 hover:bg-amber-700 px-3 py-1.5 rounded-lg text-xs">🔄 Regenerate</button>
+                <button data-act="toggle" data-shop="${d.id}" class="intAct bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs">${x.status === 'active' ? '⏸️ Pause' : '▶️ Activate'}</button>
+                <button data-act="delete" data-shop="${d.id}" class="intAct bg-red-900/40 hover:bg-red-900/60 text-red-300 px-3 py-1.5 rounded-lg text-xs">🗑️ Delete</button>
+              </div>
+            </div>`;
+        }).join('');
+
+        document.querySelectorAll('.intAct').forEach((b) => {
+          b.addEventListener('click', () => handleIntegrationAction(b.dataset.act, b.dataset.shop));
+        });
+      } catch (e) {
+        console.error(e);
+        wrap.innerHTML = `<div class="text-red-400 text-sm text-center py-8 card">${e.message}</div>`;
+      }
+    }
+
+    async function handleIntegrationAction(act, shopId) {
+      const ref = db.collection('config').doc('integrations').collection('list').doc(shopId);
+
+      if (act === 'edit') {
+        const d = await ref.get();
+        if (!d.exists) return toast('Not found', 'error');
+        const x = d.data();
+        editingShopId = shopId;
+        document.getElementById('intModalTitle').textContent = 'Edit Integration';
+        document.getElementById('intShopName').value = x.shopName || '';
+        document.getElementById('intShopId').value = shopId;
+        document.getElementById('intShopId').disabled = true;
+        document.getElementById('intSecret').value = '';
+        document.getElementById('intSecret').placeholder = '(leave blank to keep current)';
+        document.getElementById('intWebhook').value = x.webhookUrl || '';
+        document.getElementById('intAutoDebit').checked = !!x.allowAutoDebit;
+        document.getElementById('intAutoCredit').checked = !!x.allowAutoCredit;
+        document.getElementById('intModalError').classList.add('hidden');
+        openModal('intModal');
+        return;
+      }
+
+      if (act === 'regen') {
+        if (!confirm('Generate a NEW secret? The old one will stop working immediately.')) return;
+        const newSecret = generateSecret();
+        const hash = await sha256Hex(newSecret);
+        await ref.update({
+          secretCodeHash: hash,
+          secretCodeHint: hintFor(newSecret),
+          lastRegeneratedAt: FV.serverTimestamp(),
+          lastRegeneratedBy: CURRENT_ADMIN_UID,
+        });
+        await db.collection('adminLedger').add({
+          action: 'regen_secret', shopId,
+          adminUid: CURRENT_ADMIN_UID,
+          createdAt: FV.serverTimestamp(),
+        });
+        document.getElementById('shownSecret').textContent = newSecret;
+        openModal('secretModal');
+        toast('Secret regenerated', 'success');
+        loadIntegrations();
+        return;
+      }
+
+      if (act === 'toggle') {
+        const d = await ref.get();
+        if (!d.exists) return;
+        const cur = d.data().status;
+        const next = cur === 'active' ? 'paused' : 'active';
+        await ref.update({ status: next, lastToggledAt: FV.serverTimestamp() });
+        toast('Status: ' + next, 'success');
+        loadIntegrations();
+        return;
+      }
+
+      if (act === 'delete') {
+        if (!confirm('Delete integration "' + shopId + '"? Merchant wallet will be suspended.')) return;
+        const d = await ref.get();
+        if (d.exists && d.data().merchantWalletId) {
+          await db.collection('wallets').doc(d.data().merchantWalletId)
+            .set({ walletStatus: 'suspended' }, { merge: true });
+        }
+        await ref.delete();
+        await db.collection('adminLedger').add({
+          action: 'delete_integration', shopId,
+          adminUid: CURRENT_ADMIN_UID,
+          createdAt: FV.serverTimestamp(),
+        });
+        toast('Deleted', 'success');
+        loadIntegrations();
+        return;
+      }
+    }
+
+    // -------- Add/Edit modal --------
+    document.getElementById('btnAddIntegration').addEventListener('click', () => {
+      editingShopId = null;
+      document.getElementById('intModalTitle').textContent = 'Add New Integration';
+      document.getElementById('intShopName').value = '';
+      document.getElementById('intShopId').value = '';
+      document.getElementById('intShopId').disabled = false;
+      document.getElementById('intSecret').value = '';
+      document.getElementById('intSecret').placeholder = 'sk_live_... (leave blank to auto-generate)';
+      document.getElementById('intWebhook').value = '';
+      document.getElementById('intAutoDebit').checked = true;
+      document.getElementById('intAutoCredit').checked = true;
+      document.getElementById('intModalError').classList.add('hidden');
+      openModal('intModal');
+    });
+
+    document.getElementById('btnGenSecret').addEventListener('click', () => {
+      document.getElementById('intSecret').value = generateSecret();
+    });
+
+    document.getElementById('intCancel').addEventListener('click', () => closeModal('intModal'));
+
+    document.getElementById('intSave').addEventListener('click', async () => {
+      const errEl = document.getElementById('intModalError');
+      errEl.classList.add('hidden');
+
+      const shopName = document.getElementById('intShopName').value.trim();
+      const shopIdRaw = document.getElementById('intShopId').value.trim();
+      const shopId = shopIdRaw.toUpperCase();
+      const manualSecret = document.getElementById('intSecret').value.trim();
+      const webhook = document.getElementById('intWebhook').value.trim();
+      const autoD = document.getElementById('intAutoDebit').checked;
+      const autoC = document.getElementById('intAutoCredit').checked;
+
+      if (!shopName) return showIntErr('Shop Name is required');
+      if (!shopId) return showIntErr('Shop ID is required');
+      if (!/^SHOP-[A-Z0-9-]{3,40}$/i.test(shopId)) return showIntErr('Shop ID must look like SHOP-XXXXXX');
+
+      function showIntErr(msg) {
+        errEl.textContent = msg;
+        errEl.classList.remove('hidden');
+      }
+
+      const listRef = db.collection('config').doc('integrations').collection('list');
+
+      try {
+        if (!editingShopId) {
+          // CREATE
+          const exist = await listRef.doc(shopId).get();
+          if (exist.exists) return showIntErr('Shop ID already exists');
+
+          const plainSecret = manualSecret || generateSecret();
+          const hash = await sha256Hex(plainSecret);
+          const merchantWalletId = generateWalletId('M-');
+
+          // 1. create merchant wallet
+          await db.collection('wallets').doc(merchantWalletId).set({
+            walletId: merchantWalletId,
+            userId: null,
+            integrationId: shopId,
+            shopName,
+            name: shopName,
+            balance: 0,
+            walletStatus: 'active',
+            isMerchant: true,
+            createdAt: FV.serverTimestamp(),
+          });
+
+          // 2. create integration doc
+          await listRef.doc(shopId).set({
+            integrationId: shopId,
+            shopName,
+            secretCodeHash: hash,
+            secretCodeHint: hintFor(plainSecret),
+            merchantWalletId,
+            webhookUrl: webhook,
+            allowAutoDebit: !!autoD,
+            allowAutoCredit: !!autoC,
+            status: 'active',
+            createdAt: FV.serverTimestamp(),
+            createdBy: CURRENT_ADMIN_UID,
+            lastUsedAt: null,
+          });
+
+          await db.collection('adminLedger').add({
+            action: 'create_integration', shopId, shopName,
+            merchantWalletId,
+            adminUid: CURRENT_ADMIN_UID,
+            createdAt: FV.serverTimestamp(),
+          });
+
+          closeModal('intModal');
+          document.getElementById('shownSecret').textContent = plainSecret;
+          openModal('secretModal');
+          loadIntegrations();
+          toast('Integration created', 'success');
+        } else {
+          // EDIT
+          const update = {
+            shopName,
+            webhookUrl: webhook,
+            allowAutoDebit: !!autoD,
+            allowAutoCredit: !!autoC,
+            updatedAt: FV.serverTimestamp(),
+            updatedBy: CURRENT_ADMIN_UID,
+          };
+          if (manualSecret) {
+            update.secretCodeHash = await sha256Hex(manualSecret);
+            update.secretCodeHint = hintFor(manualSecret);
+          }
+          await listRef.doc(editingShopId).update(update);
+          await db.collection('adminLedger').add({
+            action: 'update_integration',
+            shopId: editingShopId,
+            adminUid: CURRENT_ADMIN_UID,
+            createdAt: FV.serverTimestamp(),
+          });
+          closeModal('intModal');
+          toast('Updated', 'success');
+          loadIntegrations();
+        }
+      } catch (e) {
+        console.error(e);
+        showIntErr(e.message || 'Save failed');
+      }
+    });
+
+    // secret modal buttons
+    document.getElementById('secretCopy').addEventListener('click', () => {
+      copyText(document.getElementById('shownSecret').textContent);
+    });
+    document.getElementById('secretDone').addEventListener('click', () => closeModal('secretModal'));
+
+    // ---------- Users ----------
+    let usersCache = [];
+    async function loadUsers() {
+      const wrap = document.getElementById('usersList');
+      wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8">Loading…</div>';
+      try {
+        const snap = await db.collection('users').limit(100).get();
+        usersCache = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+        renderUsers();
+      } catch (e) {
+        wrap.innerHTML = `<div class="text-red-400 text-sm text-center py-8">${e.message}</div>`;
+      }
+    }
+    function renderUsers() {
+      const q = document.getElementById('userSearch').value.trim().toLowerCase();
+      const list = usersCache.filter((u) => {
+        if (!q) return true;
+        return (u.email || '').toLowerCase().includes(q)
+          || (u.name || '').toLowerCase().includes(q)
+          || (u.walletId || '').toLowerCase().includes(q);
+      });
+      const wrap = document.getElementById('usersList');
+      if (!list.length) {
+        wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">No users</div>';
+        return;
+      }
+      wrap.innerHTML = list.map((u) => `
+        <div class="card p-3 flex items-center justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium truncate">${u.name || '(no name)'}</p>
+            <p class="text-xs text-slate-400 truncate">${u.email || '(no email)'}</p>
+            <p class="text-xs text-slate-500 mono">${u.walletId || '—'}</p>
+          </div>
+          <a href="#" data-uid="${u.uid}" class="userView text-orange-400 text-xs">View</a>
+        </div>`).join('');
+      wrap.querySelectorAll('.userView').forEach((a) => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          const uid = a.dataset.uid;
+          const u = usersCache.find((x) => x.uid === uid);
+          alert(`User: ${u.name || '(no name)'}\nEmail: ${u.email || '—'}\nUID: ${u.uid}\nWallet: ${u.walletId || '—'}`);
+        });
+      });
+    }
+    document.getElementById('userSearch').addEventListener('input', renderUsers);
+
+    // ---------- Wallets ----------
+    let walletsCache = [];
+    async function loadWallets() {
+      const wrap = document.getElementById('walletsList');
+      wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8">Loading…</div>';
+      try {
+        const snap = await db.collection('wallets').limit(200).get();
+        walletsCache = snap.docs.map((d) => ({ walletId: d.id, ...d.data() }));
+        renderWallets();
+      } catch (e) {
+        wrap.innerHTML = `<div class="text-red-400 text-sm text-center py-8">${e.message}</div>`;
+      }
+    }
+    function renderWallets() {
+      const q = document.getElementById('walletSearch').value.trim().toLowerCase();
+      const list = walletsCache.filter((w) => {
+        if (!q) return true;
+        return (w.walletId || '').toLowerCase().includes(q)
+          || (w.name || '').toLowerCase().includes(q)
+          || (w.shopName || '').toLowerCase().includes(q);
+      });
+      const wrap = document.getElementById('walletsList');
+      if (!list.length) {
+        wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">No wallets</div>';
+        return;
+      }
+      wrap.innerHTML = list.map((w) => `
+        <div class="card p-3 flex items-center justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium truncate">
+              ${w.isMerchant ? '🏪 ' : ''}${w.name || w.shopName || '(unnamed)'}
+            </p>
+            <p class="text-xs mono text-orange-400 truncate">${w.walletId}</p>
+            <p class="text-xs text-slate-500">Status: ${w.walletStatus || 'active'}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="font-bold mono text-sm">${fmtPoints(w.balance)}</p>
+            <button data-wid="${w.walletId}" data-action="toggleWallet" class="text-xs text-slate-400 hover:text-orange-400 mt-1">
+              ${w.walletStatus === 'active' ? 'Suspend' : 'Activate'}
+            </button>
+          </div>
+        </div>`).join('');
+      wrap.querySelectorAll('[data-action="toggleWallet"]').forEach((b) => {
+        b.addEventListener('click', async () => {
+          const wid = b.dataset.wid;
+          const w = walletsCache.find((x) => x.walletId === wid);
+          const next = w.walletStatus === 'active' ? 'suspended' : 'active';
+          await db.collection('wallets').doc(wid).update({ walletStatus: next });
+          w.walletStatus = next;
+          renderWallets();
+          toast('Wallet ' + next, 'success');
+        });
+      });
+    }
+    document.getElementById('walletSearch').addEventListener('input', renderWallets);
+
+    // ---------- Issue Points ----------
+    document.getElementById('btnIssue').addEventListener('click', async () => {
+      const walletId = document.getElementById('issueWallet').value.trim();
+      const amount = Number(document.getElementById('issueAmount').value);
+      const type = document.getElementById('issueType').value;
+      const note = document.getElementById('issueNote').value.trim();
+
+      if (!walletId) return toast('Wallet ID required', 'error');
+      if (!(amount > 0)) return toast('Invalid amount', 'error');
+
+      const wref = db.collection('wallets').doc(walletId);
+      const entryRef = db.collection('adminLedger').doc();
+
+      try {
+        await db.runTransaction(async (tx) => {
+          const d = await tx.get(wref);
+          if (!d.exists) throw new Error('Wallet not found');
+          const cur = Number(d.data().balance || 0);
+          const next = type === 'credit' ? cur + amount : cur - amount;
+          if (next < 0) throw new Error('Would result in negative balance');
+          tx.update(wref, { balance: next, updatedAt: FV.serverTimestamp() });
+          tx.set(entryRef, {
+            action: 'issue_' + type,
+            walletId, amount,
+            note,
+            adminUid: CURRENT_ADMIN_UID,
+            createdAt: FV.serverTimestamp(),
+            balanceAfter: next,
+          });
+        });
+        toast(`Points ${type === 'credit' ? 'issued' : 'debited'}`, 'success');
+        document.getElementById('issueWallet').value = '';
+        document.getElementById('issueAmount').value = '';
+        document.getElementById('issueNote').value = '';
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    });
+
+    // ---------- Config ----------
+    async function loadConfig() {
+      try {
+        const d = await db.collection('config').doc('global').get();
+        const c = d.exists ? d.data() : {};
+        document.getElementById('cfgAppName').value = c.appName || 'P2P Wallet';
+        document.getElementById('cfgMaxTx').value = c.maxTxAmount || 100000;
+        document.getElementById('cfgBonus').value = c.signupBonus || 0;
+        document.getElementById('cfgSignupOpen').checked = c.signupOpen !== false;
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    document.getElementById('btnSaveConfig').addEventListener('click', async () => {
+      try {
+        await db.collection('config').doc('global').set({
+          appName: document.getElementById('cfgAppName').value.trim(),
+          maxTxAmount: Number(document.getElementById('cfgMaxTx').value) || 0,
+          signupBonus: Number(document.getElementById('cfgBonus').value) || 0,
+          signupOpen: document.getElementById('cfgSignupOpen').checked,
+          updatedAt: FV.serverTimestamp(),
+          updatedBy: CURRENT_ADMIN_UID,
+        }, { merge: true });
+        toast('Config saved', 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    });
+
+    // ---------- Logs ----------
+    async function loadLogs() {
+      const wrap = document.getElementById('logsList');
+      const filter = document.getElementById('logShopFilter').value;
+      wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8">Loading…</div>';
+      try {
+        let q = db.collection('integrationLogs').orderBy('createdAt', 'desc').limit(50);
+        if (filter) q = db.collection('integrationLogs').where('integrationId', '==', filter).orderBy('createdAt', 'desc').limit(50);
+        const snap = await q.get();
+        if (snap.empty) {
+          wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">No logs</div>';
+          return;
+        }
+        wrap.innerHTML = snap.docs.map((d) => {
+          const x = d.data();
+          const ok = x.success ? 'text-green-400' : 'text-red-400';
+          const ts = x.createdAt ? (x.createdAt.toDate ? x.createdAt.toDate() : new Date(x.createdAt)) : null;
+          return `
+            <div class="card p-2.5 text-xs flex items-start gap-3">
+              <span class="${ok} shrink-0 mt-0.5">${x.success ? '✓' : '✗'}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate"><b class="mono">${x.integrationId || '—'}</b> · ${x.action}</p>
+                <p class="text-slate-500 truncate">
+                  ${x.amount ? 'amt=' + fmtPoints(x.amount) : ''}
+                  ${x.customerWalletId ? ' · ' + x.customerWalletId : ''}
+                  ${x.error ? ' · ' + x.error : ''}
+                </p>
+                <p class="text-slate-600">${ts ? ts.toLocaleString() : ''} · ${x.ip || ''}</p>
+              </div>
+            </div>`;
+        }).join('');
+      } catch (e) {
+        wrap.innerHTML = `<div class="text-red-400 text-sm text-center py-8">${e.message}</div>`;
+      }
+    }
+
+    document.getElementById('btnReloadLogs').addEventListener('click', loadLogs);
+
+    async function populateShopFilter() {
+      try {
+        const snap = await db.collection('config').doc('integrations').collection('list').get();
+        const sel = document.getElementById('logShopFilter');
+        snap.docs.forEach((d) => {
+          const o = document.createElement('option');
+          o.value = d.id;
+          o.textContent = (d.data().shopName || d.id) + ' (' + d.id + ')';
+          sel.appendChild(o);
+        });
+      } catch {}
+    }
+    document.getElementById('logShopFilter').addEventListener('change', loadLogs);
+
+    // ---------- Boot ----------
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      CURRENT_ADMIN_UID = user.uid;
+
+      const adoc = await db.collection('admins').doc(user.uid).get();
+      if (!adoc.exists) {
+        document.body.innerHTML = `
+          <div class="min-h-screen flex items-center justify-center p-6">
+            <div class="card p-6 max-w-sm text-center">
+              <p class="text-3xl">🚫</p>
+              <h2 class="mt-3 font-bold text-lg">Access Denied</h2>
+              <p class="text-slate-400 text-sm mt-2">Your account is not an admin.</p>
+              <p class="text-xs text-slate-500 mt-3">UID: <span class="mono">${user.uid}</span></p>
+              <a href="dashboard.html" class="btn-primary inline-block mt-4 px-4 py-2 rounded-lg text-sm">Back to Dashboard</a>
+            </div>
+          </div>`;
+        return;
+      }
+      document.getElementById('adminEmail').textContent = user.email || user.uid;
+      await populateShopFilter();
+      loadOverview();
+    })();
+  </script>
+</body>
+</html>
