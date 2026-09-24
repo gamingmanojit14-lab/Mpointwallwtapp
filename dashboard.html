@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Dashboard · P2P Wallet</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+</head>
+<body class="min-h-screen pb-24">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+    <div class="max-w-md mx-auto flex items-center justify-between px-4 py-3">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center">
+          <span class="text-slate-900 font-black">₿</span>
+        </div>
+        <span class="font-bold">P2P Wallet</span>
+      </div>
+      <button id="btnLogout" class="text-slate-400 hover:text-red-400 text-sm">Logout</button>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 pt-4 space-y-5">
+
+    <!-- Balance Card -->
+    <section class="card p-5 relative overflow-hidden">
+      <div class="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-orange-500/10 blur-2xl"></div>
+      <p class="text-slate-400 text-xs uppercase tracking-wider">Available Balance</p>
+      <div class="flex items-baseline gap-2 mt-2">
+        <span id="balance" class="text-4xl font-bold mono">0</span>
+        <span class="text-orange-500 font-semibold text-sm">PTS</span>
+      </div>
+      <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
+        <span>Wallet ID:</span>
+        <span id="walletId" class="mono text-orange-400 font-semibold">—</span>
+        <button id="copyWalletId" class="text-slate-500 hover:text-orange-400">📋</button>
+      </div>
+    </section>
+
+    <!-- Action Buttons -->
+    <section class="grid grid-cols-2 gap-3">
+      <a href="send.html" class="btn-primary rounded-2xl py-4 flex flex-col items-center gap-2 transition">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 19V5m0 0l-7 7m7-7l7 7"/>
+        </svg>
+        <span class="font-semibold">Send</span>
+      </a>
+      <a href="receive.html" class="rounded-2xl py-4 flex flex-col items-center gap-2 bg-slate-800 border border-slate-700 hover:border-orange-500 transition">
+        <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l7-7m-7 7l-7-7"/>
+        </svg>
+        <span class="font-semibold">Receive</span>
+      </a>
+    </section>
+
+    <!-- QR Quick -->
+    <section class="card p-5 flex items-center gap-4">
+      <div id="qrHolder" class="w-28 h-28 bg-white rounded-xl flex items-center justify-center overflow-hidden shrink-0">
+        <canvas id="qrCanvas" class="w-full h-full"></canvas>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-slate-400">Show this QR to receive</p>
+        <p class="mt-1 text-sm font-medium truncate">Instant P2P transfer</p>
+        <a href="receive.html" class="mt-3 inline-block text-orange-400 text-xs underline">View full QR →</a>
+      </div>
+    </section>
+
+    <!-- Recent Transactions -->
+    <section>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold">Recent Activity</h2>
+        <a href="history.html" class="text-orange-400 text-sm">See all</a>
+      </div>
+      <div id="txList" class="space-y-2">
+        <div class="text-slate-500 text-sm text-center py-8">Loading…</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-slate-800 z-30">
+    <div class="max-w-md mx-auto grid grid-cols-5 text-xs">
+      <a href="dashboard.html" class="flex flex-col items-center gap-1 py-3 text-orange-500">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+        Home
+      </a>
+      <a href="send.html" class="flex flex-col items-center gap-1 py-3 text-slate-400 hover:text-orange-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19V5m0 0l-7 7m7-7l7 7"/></svg>
+        Send
+      </a>
+      <a href="receive.html" class="flex flex-col items-center gap-1 py-3 text-slate-400 hover:text-orange-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14m0 0l7-7m-7 7l-7-7"/></svg>
+        Receive
+      </a>
+      <a href="history.html" class="flex flex-col items-center gap-1 py-3 text-slate-400 hover:text-orange-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        History
+      </a>
+      <a href="profile.html" class="flex flex-col items-center gap-1 py-3 text-slate-400 hover:text-orange-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+        Profile
+      </a>
+    </div>
+  </nav>
+
+  <script>
+    let unsubWallet = null;
+    let unsubTx = null;
+
+    function renderTx(doc) {
+      const d = doc.data();
+      const isSent = d.fromWalletId === window.__walletId;
+      const dir = isSent ? 'sent' : 'received';
+      const sign = isSent ? '−' : '+';
+      const color = isSent ? 'text-red-400' : 'text-green-400';
+      const counterparty = isSent ? d.toName || d.toWalletId : d.fromName || d.fromWalletId;
+      const dt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+      const timeStr = dt ? dt.toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+
+      return `
+        <div class="card p-3 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full ${isSent ? 'bg-red-500/15' : 'bg-green-500/15'} flex items-center justify-center shrink-0">
+            <span class="${isSent ? 'text-red-400' : 'text-green-400'} text-lg">${isSent ? '↑' : '↓'}</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate">${counterparty || 'Unknown'}</p>
+            <p class="text-xs text-slate-500 truncate">${timeStr}${d.note ? ' · ' + d.note : ''}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="${color} font-semibold mono text-sm">${sign}${fmtPoints(d.amount)}</p>
+            <p class="text-[10px] text-slate-500 uppercase">${dir}</p>
+          </div>
+        </div>`;
+    }
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+
+      const walletId = await getOwnWalletId();
+      if (!walletId) {
+        toast('No wallet linked to your account.', 'error', 4000);
+        return;
+      }
+      window.__walletId = walletId;
+
+      document.getElementById('walletId').textContent = walletId;
+
+      // Live wallet balance
+      unsubWallet = db.collection('wallets').doc(walletId).onSnapshot((doc) => {
+        if (!doc.exists) return;
+        const w = doc.data();
+        document.getElementById('balance').textContent = fmtPoints(w.balance);
+      });
+
+      // QR
+      try {
+        await QRCode.toCanvas(document.getElementById('qrCanvas'), walletId, {
+          width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' },
+        });
+      } catch (e) {
+        console.warn('QR error:', e);
+      }
+
+      // Copy walletId
+      document.getElementById('copyWalletId').addEventListener('click', () => copyText(walletId));
+
+      // Logout
+      document.getElementById('btnLogout').addEventListener('click', () => {
+        if (confirm('Logout from P2P Wallet?')) logout();
+      });
+
+      // Live transactions (both directions)
+      const txList = document.getElementById('txList');
+      const q1 = db.collection('transactions').where('fromWalletId', '==', walletId)
+        .orderBy('createdAt', 'desc').limit(10);
+      const q2 = db.collection('transactions').where('toWalletId', '==', walletId)
+        .orderBy('createdAt', 'desc').limit(10);
+
+      const seen = new Map();
+
+      function rerender() {
+        const all = [...seen.values()].sort((a, b) => {
+          const ta = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime()) : 0;
+          const tb = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime()) : 0;
+          return tb - ta;
+        }).slice(0, 5);
+
+        if (!all.length) {
+          txList.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">No transactions yet</div>';
+          return;
+        }
+        txList.innerHTML = all.map((d) => {
+          const isSent = d.fromWalletId === walletId;
+          const counterparty = isSent ? d.toName || d.toWalletId : d.fromName || d.fromWalletId;
+          const dt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
+          const timeStr = dt ? dt.toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+          return `
+            <div class="card p-3 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full ${isSent ? 'bg-red-500/15' : 'bg-green-500/15'} flex items-center justify-center shrink-0">
+                <span class="${isSent ? 'text-red-400' : 'text-green-400'} text-lg">${isSent ? '↑' : '↓'}</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate">${counterparty || 'Unknown'}</p>
+                <p class="text-xs text-slate-500 truncate">${timeStr}${d.note ? ' · ' + d.note : ''}</p>
+              </div>
+              <div class="text-right shrink-0">
+                <p class="${isSent ? 'text-red-400' : 'text-green-400'} font-semibold mono text-sm">${isSent ? '−' : '+'}${fmtPoints(d.amount)}</p>
+              </div>
+            </div>`;
+        }).join('');
+      }
+
+      unsubTx = () => { q1.onSnapshot(() => {}); };
+
+      q1.onSnapshot((snap) => {
+        snap.docs.forEach((d) => seen.set(d.id, { txId: d.id, ...d.data() }));
+        rerender();
+      });
+      q2.onSnapshot((snap) => {
+        snap.docs.forEach((d) => seen.set(d.id, { txId: d.id, ...d.data() }));
+        rerender();
+      });
+    })();
+  </script>
+</body>
+</html>
