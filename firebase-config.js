@@ -5,13 +5,13 @@
  * ⚠️ এই values public-safe (client-side) — Firestore Rules দিয়ে protect করতে হবে।
  */
 window.FIREBASE_CONFIG = {
-  apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-  authDomain: "p2p-wallet-XXXXX.firebaseapp.com",
-  projectId: "p2p-wallet-XXXXX",
-  storageBucket: "p2p-wallet-XXXXX.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdef1234567890abcdef",
+  apiKey: "AIzaSyCRugTsxKNhKaSUSwMIpjExdSzsScC-kO4",
+  authDomain: "secret-chat-93485.firebaseapp.com",
+  projectId: "secret-chat-93485",
+  storageBucket: "secret-chat-93485.firebasestorage.app",
+  messagingSenderId: "65936905235",
+  appId: "1:65936905235:web:7f9e8a5514e2bea83f9be6",
 };
 
 // Render backend base URL
-window.API_BASE_URL = "https://p2p-wallet-api.onrender.com";
+window.API_BASE_URL = "https://mpointwallwt-1.onrender.com";
