@@ -7,16 +7,15 @@
   <title>Dashboard · P2P Wallet</title>
   <link rel="manifest" href="manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="common.js"></script>
 </head>
 <body class="min-h-screen pb-24">
 
-  <!-- Header -->
+  <!-- ============ HEADER ============ -->
   <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800">
     <div class="max-w-md mx-auto flex items-center justify-between px-4 py-3">
       <div class="flex items-center gap-2">
@@ -31,22 +30,25 @@
 
   <main class="max-w-md mx-auto px-4 pt-4 space-y-5">
 
-    <!-- Balance Card -->
+    <!-- ============ BALANCE CARD ============ -->
     <section class="card p-5 relative overflow-hidden">
       <div class="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-orange-500/10 blur-2xl"></div>
+
       <p class="text-slate-400 text-xs uppercase tracking-wider">Available Balance</p>
+
       <div class="flex items-baseline gap-2 mt-2">
         <span id="balance" class="text-4xl font-bold mono">0</span>
         <span class="text-orange-500 font-semibold text-sm">PTS</span>
       </div>
+
       <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
         <span>Wallet ID:</span>
         <span id="walletId" class="mono text-orange-400 font-semibold">—</span>
-        <button id="copyWalletId" class="text-slate-500 hover:text-orange-400">📋</button>
+        <button id="copyWalletId" class="text-slate-500 hover:text-orange-400" title="Copy">📋</button>
       </div>
     </section>
 
-    <!-- Action Buttons -->
+    <!-- ============ ACTION BUTTONS ============ -->
     <section class="grid grid-cols-2 gap-3">
       <a href="send.html" class="btn-primary rounded-2xl py-4 flex flex-col items-center gap-2 transition">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -62,10 +64,13 @@
       </a>
     </section>
 
-    <!-- QR Quick -->
+    <!-- ============ QUICK QR ============ -->
     <section class="card p-5 flex items-center gap-4">
-      <div id="qrHolder" class="w-28 h-28 bg-white rounded-xl flex items-center justify-center overflow-hidden shrink-0">
-        <canvas id="qrCanvas" class="w-full h-full"></canvas>
+      <div class="w-28 h-28 bg-white rounded-xl flex items-center justify-center overflow-hidden shrink-0 relative">
+        <canvas id="qrCanvas" width="220" height="220" class="w-full h-full"></canvas>
+        <div id="qrLoadingSmall" class="absolute inset-0 flex items-center justify-center bg-white">
+          <div class="w-6 h-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin"></div>
+        </div>
       </div>
       <div class="flex-1 min-w-0">
         <p class="text-sm text-slate-400">Show this QR to receive</p>
@@ -74,19 +79,19 @@
       </div>
     </section>
 
-    <!-- Recent Transactions -->
+    <!-- ============ RECENT ACTIVITY ============ -->
     <section>
       <div class="flex items-center justify-between mb-3">
         <h2 class="font-semibold">Recent Activity</h2>
         <a href="history.html" class="text-orange-400 text-sm">See all</a>
       </div>
       <div id="txList" class="space-y-2">
-        <div class="text-slate-500 text-sm text-center py-8">Loading…</div>
+        <div class="text-slate-500 text-sm text-center py-8 card">Loading…</div>
       </div>
     </section>
   </main>
 
-  <!-- Bottom Nav -->
+  <!-- ============ BOTTOM NAV ============ -->
   <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-slate-800 z-30">
     <div class="max-w-md mx-auto grid grid-cols-5 text-xs">
       <a href="dashboard.html" class="flex flex-col items-center gap-1 py-3 text-orange-500">
@@ -113,124 +118,230 @@
   </nav>
 
   <script>
+    /* ============================================================
+     * dashboard.html — Balance + QR + Recent transactions
+     * Uses built-in QRGen (from common.js), no external library
+     * ============================================================ */
+
+    let MY_WALLET_ID = null;
     let unsubWallet = null;
-    let unsubTx = null;
+    let unsubTxFrom = null;
+    let unsubTxTo = null;
+    const seenTx = new Map(); // txId -> data
 
-    function renderTx(doc) {
-      const d = doc.data();
-      const isSent = d.fromWalletId === window.__walletId;
-      const dir = isSent ? 'sent' : 'received';
-      const sign = isSent ? '−' : '+';
-      const color = isSent ? 'text-red-400' : 'text-green-400';
-      const counterparty = isSent ? d.toName || d.toWalletId : d.fromName || d.fromWalletId;
-      const dt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-      const timeStr = dt ? dt.toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+    /* ---------- QR render (built-in + fallback) ---------- */
+    async function renderSmallQR(walletId) {
+      const canvas = document.getElementById('qrCanvas');
+      const loading = document.getElementById('qrLoadingSmall');
 
-      return `
-        <div class="card p-3 flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full ${isSent ? 'bg-red-500/15' : 'bg-green-500/15'} flex items-center justify-center shrink-0">
-            <span class="${isSent ? 'text-red-400' : 'text-green-400'} text-lg">${isSent ? '↑' : '↓'}</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium truncate">${counterparty || 'Unknown'}</p>
-            <p class="text-xs text-slate-500 truncate">${timeStr}${d.note ? ' · ' + d.note : ''}</p>
-          </div>
-          <div class="text-right shrink-0">
-            <p class="${color} font-semibold mono text-sm">${sign}${fmtPoints(d.amount)}</p>
-            <p class="text-[10px] text-slate-500 uppercase">${dir}</p>
-          </div>
-        </div>`;
+      // Method 1: Built-in QRGen
+      if (window.QRGen && typeof window.QRGen.renderToCanvas === 'function') {
+        try {
+          window.QRGen.renderToCanvas(canvas, walletId, {
+            size: 220, margin: 3,
+            darkColor: '#0f172a', lightColor: '#ffffff',
+          });
+          if (loading) loading.style.display = 'none';
+          console.log('[dashboard] QR rendered via built-in generator');
+          return;
+        } catch (e) {
+          console.warn('[dashboard] built-in QR failed:', e.message);
+        }
+      }
+
+      // Method 2: Public API fallback
+      try {
+        const url = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=3&data='
+          + encodeURIComponent(walletId);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = url;
+        });
+        const ctx = canvas.getContext('2d');
+        canvas.width = 220;
+        canvas.height = 220;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 220, 220);
+        ctx.drawImage(img, 0, 0, 220, 220);
+        if (loading) loading.style.display = 'none';
+        console.log('[dashboard] QR rendered via API fallback');
+        return;
+      } catch (e) {
+        console.warn('[dashboard] API fallback failed:', e.message);
+      }
+
+      // Method 3: Text fallback
+      const ctx = canvas.getContext('2d');
+      canvas.width = 220;
+      canvas.height = 220;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 220, 220);
+      ctx.fillStyle = '#0f172a';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(walletId, 110, 112);
+      if (loading) loading.style.display = 'none';
     }
 
-    (async () => {
-      const user = await requireAuth();
-      if (!user) return;
+    /* ---------- Time helper ---------- */
+    function getTime(t) {
+      if (!t) return 0;
+      if (t.toDate) return t.toDate().getTime();
+      return new Date(t).getTime();
+    }
 
-      const walletId = await getOwnWalletId();
-      if (!walletId) {
-        toast('No wallet linked to your account.', 'error', 4000);
+    /* ---------- Render recent transactions ---------- */
+    function renderRecentTx() {
+      const wrap = document.getElementById('txList');
+      const walletId = MY_WALLET_ID;
+
+      let all = [...seenTx.values()];
+      all.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
+      all = all.slice(0, 5);
+
+      if (!all.length) {
+        wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">No transactions yet</div>';
         return;
       }
-      window.__walletId = walletId;
 
-      document.getElementById('walletId').textContent = walletId;
+      wrap.innerHTML = all.map((d) => {
+        const isSent = d.fromWalletId === walletId;
+        const counterparty = isSent
+          ? (d.toName || d.toWalletId || 'Unknown')
+          : (d.fromName || d.fromWalletId || 'Unknown');
+        const dt = d.createdAt
+          ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt))
+          : null;
+        const timeStr = dt
+          ? dt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+          : '';
+        const meta = [timeStr, d.note].filter(Boolean).join(' · ');
 
-      // Live wallet balance
-      unsubWallet = db.collection('wallets').doc(walletId).onSnapshot((doc) => {
-        if (!doc.exists) return;
-        const w = doc.data();
-        document.getElementById('balance').textContent = fmtPoints(w.balance);
-      });
+        return `
+          <div class="card p-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full ${isSent ? 'bg-red-500/15' : 'bg-green-500/15'} flex items-center justify-center shrink-0">
+              <span class="${isSent ? 'text-red-400' : 'text-green-400'} text-lg">${isSent ? '↑' : '↓'}</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium truncate">${counterparty}</p>
+              <p class="text-xs text-slate-500 truncate">${meta}</p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="${isSent ? 'text-red-400' : 'text-green-400'} font-semibold mono text-sm">
+                ${isSent ? '−' : '+'}${fmtPoints(d.amount)}
+              </p>
+              <p class="text-[10px] text-slate-500 uppercase">${isSent ? 'sent' : 'received'}</p>
+            </div>
+          </div>`;
+      }).join('');
+    }
 
-      // QR
+    /* ---------- Boot ---------- */
+    (async () => {
       try {
-        await QRCode.toCanvas(document.getElementById('qrCanvas'), walletId, {
-          width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' },
-        });
-      } catch (e) {
-        console.warn('QR error:', e);
-      }
+        const user = await requireAuth();
+        if (!user) return;
 
-      // Copy walletId
-      document.getElementById('copyWalletId').addEventListener('click', () => copyText(walletId));
-
-      // Logout
-      document.getElementById('btnLogout').addEventListener('click', () => {
-        if (confirm('Logout from P2P Wallet?')) logout();
-      });
-
-      // Live transactions (both directions)
-      const txList = document.getElementById('txList');
-      const q1 = db.collection('transactions').where('fromWalletId', '==', walletId)
-        .orderBy('createdAt', 'desc').limit(10);
-      const q2 = db.collection('transactions').where('toWalletId', '==', walletId)
-        .orderBy('createdAt', 'desc').limit(10);
-
-      const seen = new Map();
-
-      function rerender() {
-        const all = [...seen.values()].sort((a, b) => {
-          const ta = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime()) : 0;
-          const tb = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime()) : 0;
-          return tb - ta;
-        }).slice(0, 5);
-
-        if (!all.length) {
-          txList.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">No transactions yet</div>';
+        // Wallet ID
+        const walletId = await getOwnWalletId();
+        if (!walletId) {
+          toast('No wallet linked to your account', 'error', 4000);
           return;
         }
-        txList.innerHTML = all.map((d) => {
-          const isSent = d.fromWalletId === walletId;
-          const counterparty = isSent ? d.toName || d.toWalletId : d.fromName || d.fromWalletId;
-          const dt = d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) : null;
-          const timeStr = dt ? dt.toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
-          return `
-            <div class="card p-3 flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full ${isSent ? 'bg-red-500/15' : 'bg-green-500/15'} flex items-center justify-center shrink-0">
-                <span class="${isSent ? 'text-red-400' : 'text-green-400'} text-lg">${isSent ? '↑' : '↓'}</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium truncate">${counterparty || 'Unknown'}</p>
-                <p class="text-xs text-slate-500 truncate">${timeStr}${d.note ? ' · ' + d.note : ''}</p>
-              </div>
-              <div class="text-right shrink-0">
-                <p class="${isSent ? 'text-red-400' : 'text-green-400'} font-semibold mono text-sm">${isSent ? '−' : '+'}${fmtPoints(d.amount)}</p>
-              </div>
-            </div>`;
-        }).join('');
+        MY_WALLET_ID = walletId;
+        window.__walletId = walletId; // legacy compat
+
+        document.getElementById('walletId').textContent = walletId;
+
+        // ---- Live wallet balance ----
+        if (unsubWallet) unsubWallet();
+        unsubWallet = db.collection('wallets').doc(walletId).onSnapshot(
+          (doc) => {
+            if (!doc.exists) return;
+            const w = doc.data();
+            document.getElementById('balance').textContent = fmtPoints(w.balance);
+          },
+          (err) => console.warn('Wallet listener error:', err)
+        );
+
+        // ---- QR ----
+        await renderSmallQR(walletId);
+
+        // ---- Copy wallet ID ----
+        document.getElementById('copyWalletId').addEventListener('click', () => copyText(walletId));
+
+        // ---- Logout ----
+        document.getElementById('btnLogout').addEventListener('click', () => {
+          if (confirm('Logout from P2P Wallet?')) logout();
+        });
+
+        // ---- Live transactions (both directions) ----
+        if (unsubTxFrom) unsubTxFrom();
+        if (unsubTxTo) unsubTxTo();
+
+        unsubTxFrom = db.collection('transactions')
+          .where('fromWalletId', '==', walletId)
+          .orderBy('createdAt', 'desc')
+          .limit(10)
+          .onSnapshot(
+            (snap) => {
+              snap.docs.forEach((d) => seenTx.set(d.id, { txId: d.id, ...d.data() }));
+              renderRecentTx();
+            },
+            (err) => {
+              console.warn('txFrom listener error:', err);
+              // fallback without orderBy (missing index)
+              db.collection('transactions')
+                .where('fromWalletId', '==', walletId)
+                .limit(10)
+                .get()
+                .then((snap) => {
+                  snap.docs.forEach((d) => seenTx.set(d.id, { txId: d.id, ...d.data() }));
+                  renderRecentTx();
+                })
+                .catch(() => {});
+            }
+          );
+
+        unsubTxTo = db.collection('transactions')
+          .where('toWalletId', '==', walletId)
+          .orderBy('createdAt', 'desc')
+          .limit(10)
+          .onSnapshot(
+            (snap) => {
+              snap.docs.forEach((d) => seenTx.set(d.id, { txId: d.id, ...d.data() }));
+              renderRecentTx();
+            },
+            (err) => {
+              console.warn('txTo listener error:', err);
+              db.collection('transactions')
+                .where('toWalletId', '==', walletId)
+                .limit(10)
+                .get()
+                .then((snap) => {
+                  snap.docs.forEach((d) => seenTx.set(d.id, { txId: d.id, ...d.data() }));
+                  renderRecentTx();
+                })
+                .catch(() => {});
+            }
+          );
+
+        console.log('[dashboard] ready · walletId =', walletId);
+      } catch (e) {
+        console.error('[dashboard] boot error:', e);
+        toast('Failed to load: ' + e.message, 'error', 4000);
       }
-
-      unsubTx = () => { q1.onSnapshot(() => {}); };
-
-      q1.onSnapshot((snap) => {
-        snap.docs.forEach((d) => seen.set(d.id, { txId: d.id, ...d.data() }));
-        rerender();
-      });
-      q2.onSnapshot((snap) => {
-        snap.docs.forEach((d) => seen.set(d.id, { txId: d.id, ...d.data() }));
-        rerender();
-      });
     })();
+
+    /* ---------- Cleanup on page unload ---------- */
+    window.addEventListener('beforeunload', () => {
+      try { unsubWallet && unsubWallet(); } catch {}
+      try { unsubTxFrom && unsubTxFrom(); } catch {}
+      try { unsubTxTo && unsubTxTo(); } catch {}
+    });
   </script>
 </body>
 </html>
