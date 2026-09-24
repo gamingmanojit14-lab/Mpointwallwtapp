@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>API Docs · P2P Wallet</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+</head>
+<body class="min-h-screen pb-16">
+
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+    <div class="max-w-3xl mx-auto flex items-center gap-3 px-4 py-3">
+      <a href="dashboard.html" class="text-slate-400 hover:text-orange-400">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+      </a>
+      <h1 class="font-bold text-lg">📘 Merchant API Docs</h1>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 pt-4 space-y-6 text-sm leading-relaxed">
+
+    <section class="card p-5">
+      <h2 class="font-bold text-lg mb-2">Overview</h2>
+      <p class="text-slate-400">
+        P2P Wallet backend <span class="mono text-orange-400" id="baseUrl">—</span> এ হোস্ট করা।
+        TextilePOS (বা যেকোনো POS) এই API ব্যবহার করে customer-এর P2P wallet থেকে points debit/credit করতে পারে।
+      </p>
+    </section>
+
+    <section class="card p-5">
+      <h2 class="font-bold text-lg mb-3">🔐 Authentication</h2>
+      <p class="text-slate-400 mb-3">প্রতিটি request-এ ২টি header দিতে হবে:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs text-orange-300">x-api-key: sk_live_xxxxxxxxxxxxxxxxxxxxxxxx
+x-shop-id: SHOP-A3K9Q7</pre>
+      <p class="text-slate-500 text-xs mt-2">
+        Secret code কখনো client-side JS-এ বসাবেন না — শুধু server-side থেকে call করুন।
+      </p>
+    </section>
+
+    <!-- 1. Verify -->
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="bg-green-600 text-white text-xs px-2 py-0.5 rounded">POST</span>
+        <span class="mono text-orange-400">/api/verifyConnection</span>
+      </div>
+      <p class="text-slate-400 mb-3">Integration valid কিনা এবং merchant wallet info check করে।</p>
+      <p class="text-xs font-semibold mb-2">Example:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs">curl -X POST <span class="text-orange-300" id="c1">https://your-api/api/verifyConnection</span> \
+  -H "x-api-key: sk_live_..." \
+  -H "x-shop-id: SHOP-A3K9Q7"</pre>
+      <p class="text-xs font-semibold mt-3 mb-2">Response:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs text-green-300">{
+  "success": true,
+  "shopName": "Sri Krishna Fastfood",
+  "shopId": "SHOP-A3K9Q7",
+  "merchantWalletId": "M-B7X4M2",
+  "status": "active",
+  "allowAutoDebit": true,
+  "allowAutoCredit": true
+}</pre>
+    </section>
+
+    <!-- 2. Debit -->
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="bg-green-600 text-white text-xs px-2 py-0.5 rounded">POST</span>
+        <span class="mono text-orange-400">/api/debitPoints</span>
+      </div>
+      <p class="text-slate-400 mb-3">Customer wallet থেকে merchant wallet-এ points transfer (customer pays)।</p>
+      <p class="text-xs font-semibold mb-2">Body:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs">{
+  "customerWalletId": "W-A3K9Q7M2",
+  "amount": 500,
+  "externalRef": "INV-2024-001",
+  "note": "POS sale"
+}</pre>
+      <p class="text-xs font-semibold mt-3 mb-2">Response:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs text-green-300">{
+  "success": true,
+  "txId": "TX-1710000000-abc123",
+  "newBalance": 350
+}</pre>
+    </section>
+
+    <!-- 3. Credit -->
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="bg-green-600 text-white text-xs px-2 py-0.5 rounded">POST</span>
+        <span class="mono text-orange-400">/api/creditPoints</span>
+      </div>
+      <p class="text-slate-400 mb-3">Merchant wallet থেকে customer wallet-এ points দেয় (loyalty earn / cashback)।</p>
+      <p class="text-xs font-semibold mb-2">Body:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs">{
+  "customerWalletId": "W-A3K9Q7M2",
+  "amount": 5,
+  "externalRef": "INV-2024-001",
+  "note": "Loyalty earn 1%"
+}</pre>
+      <p class="text-xs font-semibold mt-3 mb-2">Response:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs text-green-300">{
+  "success": true,
+  "txId": "TX-1710000001-def456",
+  "newBalance": 355
+}</pre>
+    </section>
+
+    <!-- 4. Balance -->
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded">GET</span>
+        <span class="mono text-orange-400">/api/getBalance?walletId=W-XXXXXX</span>
+      </div>
+      <p class="text-slate-400 mb-3">Wallet এর current balance + status।</p>
+      <p class="text-xs font-semibold mb-2">Response:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs text-green-300">{
+  "success": true,
+  "walletId": "W-A3K9Q7M2",
+  "balance": 355,
+  "walletStatus": "active",
+  "name": "Rahim Uddin",
+  "isMerchant": false
+}</pre>
+    </section>
+
+    <!-- 5. Create payment request -->
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="bg-green-600 text-white text-xs px-2 py-0.5 rounded">POST</span>
+        <span class="mono text-orange-400">/api/createPaymentRequest</span>
+      </div>
+      <p class="text-slate-400 mb-3">Customer-কে QR scan করে pay করার জন্য payment request তৈরি করে।</p>
+      <p class="text-xs font-semibold mb-2">Body:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs">{
+  "amount": 500,
+  "invoiceNo": "INV-2024-001",
+  "expiresIn": 300
+}</pre>
+      <p class="text-xs font-semibold mt-3 mb-2">Response:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs text-green-300">{
+  "success": true,
+  "requestId": "PR-1710000000-a1b2c3d4",
+  "paymentURL": "https://wallet.web.app/pay.html?r=PR-...",
+  "expiresAt": 1710000300000,
+  "signature": "abc..."
+}</pre>
+      <p class="text-slate-500 text-xs mt-2">`paymentURL` QR code-এ encode করে customer-কে দেখান।</p>
+    </section>
+
+    <!-- 6. Payment status -->
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded">GET</span>
+        <span class="mono text-orange-400">/api/paymentStatus?requestId=PR-XXX</span>
+      </div>
+      <p class="text-slate-400 mb-3">Payment request-এর current status check।</p>
+      <p class="text-xs font-semibold mb-2">Response:</p>
+      <pre class="bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs text-green-300">{
+  "success": true,
+  "requestId": "PR-...",
+  "status": "paid",
+  "amount": 500,
+  "paidByWalletId": "W-A3K9Q7M2",
+  "txId": "TX-...",
+  "expiresAt": 1710000300000
+}</pre>
+    </section>
+
+    <!-- Errors -->
+    <section class="card p-5">
+      <h2 class="font-bold text-lg mb-3">⚠️ Error Responses</h2>
+      <table class="w-full text-xs">
+        <thead class="text-slate-400 uppercase text-left">
+          <tr><th class="py-1">Status</th><th class="py-1">Meaning</th></tr>
+        </thead>
+        <tbody class="text-slate-300">
+          <tr><td class="py-1 mono">400</td><td>Invalid params / insufficient balance</td></tr>
+          <tr><td class="py-1 mono">401</td><td>Missing or invalid secret code</td></tr>
+          <tr><td class="py-1 mono">403</td><td>Integration paused / action not allowed</td></tr>
+          <tr><td class="py-1 mono">404</td><td>Wallet or request not found</td></tr>
+          <tr><td class="py-1 mono">410</td><td>Payment request expired</td></tr>
+          <tr><td class="py-1 mono">429</td><td>Rate limit exceeded (100/min)</td></tr>
+          <tr><td class="py-1 mono">500</td><td>Server error</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card p-5">
+      <h2 class="font-bold text-lg mb-3">🧪 Live Test</h2>
+      <p class="text-slate-400 mb-3 text-xs">নিচের form-এ আপনার credentials দিয়ে সরাসরি API test করুন।</p>
+      <div class="space-y-3">
+        <input id="tShopId" type="text" placeholder="SHOP-XXXXXX"
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
+        <input id="tSecret" type="password" placeholder="sk_live_..."
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
+        <button id="tVerify" class="btn-primary w-full py-3 rounded-xl font-semibold">Test verifyConnection</button>
+        <pre id="tResult" class="hidden bg-slate-900 border border-slate-700 rounded-lg p-3 overflow-x-auto mono text-xs"></pre>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    document.getElementById('baseUrl').textContent = API_BASE_URL;
+    document.getElementById('c1').textContent = API_BASE_URL + '/api/verifyConnection';
+
+    document.getElementById('tVerify').addEventListener('click', async () => {
+      const shopId = document.getElementById('tShopId').value.trim().toUpperCase();
+      const secret = document.getElementById('tSecret').value.trim();
+      const out = document.getElementById('tResult');
+      out.classList.remove('hidden');
+      if (!shopId || !secret) { out.textContent = 'Shop ID and Secret required.'; return; }
+      out.textContent = 'Testing…';
+      try {
+        const r = await fetch(API_BASE_URL + '/api/verifyConnection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': secret, 'x-shop-id': shopId },
+        });
+        const j = await r.json();
+        out.textContent = JSON.stringify(j, null, 2);
+        out.className = j.success
+          ? 'bg-slate-900 border border-green-700 rounded-lg p-3 overflow-x-auto mono text-xs text-green-300'
+          : 'bg-slate-900 border border-red-700 rounded-lg p-3 overflow-x-auto mono text-xs text-red-300';
+      } catch (e) {
+        out.textContent = 'Error: ' + e.message;
+      }
+    });
+  </script>
+</body>
+</html>
