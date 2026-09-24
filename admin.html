@@ -7,9 +7,9 @@
   <title>Admin · P2P Wallet</title>
   <link rel="manifest" href="manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="common.js"></script>
 </head>
@@ -65,6 +65,9 @@
         <p class="text-xs text-slate-400 uppercase">Total Points in Circulation</p>
         <p id="statSupply" class="text-3xl font-bold mt-1 mono text-orange-500">—</p>
       </div>
+      <div class="mt-3 flex justify-end">
+        <button id="btnReloadOverview" class="text-sm text-orange-400 hover:text-orange-300">🔄 Reload</button>
+      </div>
     </section>
 
     <!-- ============ INTEGRATIONS ============ -->
@@ -74,7 +77,7 @@
         <button id="btnAddIntegration" class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold">+ Add New</button>
       </div>
       <div id="integrationsList" class="space-y-3">
-        <div class="text-slate-500 text-sm text-center py-8 card">No integrations yet</div>
+        <div class="text-slate-500 text-sm text-center py-8 card">Loading…</div>
       </div>
     </section>
 
@@ -172,7 +175,7 @@
     </section>
   </main>
 
-  <!-- ============ ADD INTEGRATION MODAL ============ -->
+  <!-- ============ ADD/EDIT INTEGRATION MODAL ============ -->
   <div id="intModal" class="hidden fixed inset-0 z-50 bg-black/70 items-center justify-center p-4 overflow-y-auto">
     <div class="card p-6 w-full max-w-md space-y-3 my-8">
       <h3 id="intModalTitle" class="font-bold text-lg">Add New Integration</h3>
@@ -192,7 +195,7 @@
       <div>
         <label class="text-sm block mb-1">Secret Code</label>
         <div class="flex gap-2">
-          <input id="intSecret" type="text" placeholder="sk_live_..." 
+          <input id="intSecret" type="text" placeholder="sk_live_..."
             class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm mono focus:outline-none focus:border-orange-500" />
           <button id="btnGenSecret" type="button" class="bg-slate-800 border border-slate-700 rounded-xl px-3 hover:border-orange-500 text-sm">Generate</button>
         </div>
@@ -242,9 +245,9 @@
 
   <script>
     let CURRENT_ADMIN_UID = null;
-    let editingShopId = null; // null = create, else = edit
+    let editingShopId = null;
 
-    // ---------- Helpers ----------
+    /* ---------- Helpers ---------- */
     async function sha256Hex(str) {
       const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
       return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -283,7 +286,7 @@
       return Math.floor(s / 86400) + 'd ago';
     }
 
-    // ---------- Tabs ----------
+    /* ---------- Tabs ---------- */
     document.querySelectorAll('.adminTab').forEach((b) => {
       b.addEventListener('click', () => {
         document.querySelectorAll('.adminTab').forEach((x) => {
@@ -306,31 +309,37 @@
       });
     });
 
-    // ---------- Overview ----------
+    /* ---------- Overview (fixed: no count(), uses .size) ---------- */
     async function loadOverview() {
       try {
-        const [uSnap, wSnap, tSnap, iSnap, wAll] = await Promise.all([
-          db.collection('users').count().get(),
-          db.collection('wallets').count().get(),
-          db.collection('transactions').count().get(),
-          db.collection('config').doc('integrations').collection('list').count().get(),
+        const [uSnap, wSnap, tSnap, iSnap] = await Promise.all([
+          db.collection('users').get(),
           db.collection('wallets').get(),
+          db.collection('transactions').get(),
+          db.collection('config').doc('integrations').collection('list').get(),
         ]);
-        document.getElementById('statUsers').textContent = uSnap.data().count;
-        document.getElementById('statWallets').textContent = wSnap.data().count;
-        document.getElementById('statTx').textContent = tSnap.data().count;
-        document.getElementById('statIntegrations').textContent = iSnap.data().count;
+
+        document.getElementById('statUsers').textContent = uSnap.size;
+        document.getElementById('statWallets').textContent = wSnap.size;
+        document.getElementById('statTx').textContent = tSnap.size;
+        document.getElementById('statIntegrations').textContent = iSnap.size;
 
         let total = 0;
-        wAll.forEach((d) => { total += Number(d.data().balance || 0); });
+        wSnap.forEach((d) => { total += Number(d.data().balance || 0); });
         document.getElementById('statSupply').textContent = fmtPoints(total);
+
       } catch (e) {
-        console.error(e);
+        console.error('Overview load error:', e);
         toast(e.message, 'error');
+        ['statUsers', 'statWallets', 'statTx', 'statIntegrations'].forEach((id) => {
+          document.getElementById(id).textContent = '0';
+        });
+        document.getElementById('statSupply').textContent = '0';
       }
     }
+    document.getElementById('btnReloadOverview').addEventListener('click', loadOverview);
 
-    // ---------- Integrations ----------
+    /* ---------- Integrations ---------- */
     async function loadIntegrations() {
       const wrap = document.getElementById('integrationsList');
       wrap.innerHTML = '<div class="text-slate-500 text-sm text-center py-8 card">Loading…</div>';
@@ -451,7 +460,7 @@
       }
     }
 
-    // -------- Add/Edit modal --------
+    /* -------- Add/Edit modal -------- */
     document.getElementById('btnAddIntegration').addEventListener('click', () => {
       editingShopId = null;
       document.getElementById('intModalTitle').textContent = 'Add New Integration';
@@ -485,14 +494,14 @@
       const autoD = document.getElementById('intAutoDebit').checked;
       const autoC = document.getElementById('intAutoCredit').checked;
 
-      if (!shopName) return showIntErr('Shop Name is required');
-      if (!shopId) return showIntErr('Shop ID is required');
-      if (!/^SHOP-[A-Z0-9-]{3,40}$/i.test(shopId)) return showIntErr('Shop ID must look like SHOP-XXXXXX');
-
       function showIntErr(msg) {
         errEl.textContent = msg;
         errEl.classList.remove('hidden');
       }
+
+      if (!shopName) return showIntErr('Shop Name is required');
+      if (!shopId) return showIntErr('Shop ID is required');
+      if (!/^SHOP-[A-Z0-9-]{3,40}$/i.test(shopId)) return showIntErr('Shop ID must look like SHOP-XXXXXX');
 
       const listRef = db.collection('config').doc('integrations').collection('list');
 
@@ -578,13 +587,12 @@
       }
     });
 
-    // secret modal buttons
     document.getElementById('secretCopy').addEventListener('click', () => {
       copyText(document.getElementById('shownSecret').textContent);
     });
     document.getElementById('secretDone').addEventListener('click', () => closeModal('secretModal'));
 
-    // ---------- Users ----------
+    /* ---------- Users ---------- */
     let usersCache = [];
     async function loadUsers() {
       const wrap = document.getElementById('usersList');
@@ -630,7 +638,7 @@
     }
     document.getElementById('userSearch').addEventListener('input', renderUsers);
 
-    // ---------- Wallets ----------
+    /* ---------- Wallets ---------- */
     let walletsCache = [];
     async function loadWallets() {
       const wrap = document.getElementById('walletsList');
@@ -677,18 +685,22 @@
           const wid = b.dataset.wid;
           const w = walletsCache.find((x) => x.walletId === wid);
           const next = w.walletStatus === 'active' ? 'suspended' : 'active';
-          await db.collection('wallets').doc(wid).update({ walletStatus: next });
-          w.walletStatus = next;
-          renderWallets();
-          toast('Wallet ' + next, 'success');
+          try {
+            await db.collection('wallets').doc(wid).update({ walletStatus: next });
+            w.walletStatus = next;
+            renderWallets();
+            toast('Wallet ' + next, 'success');
+          } catch (e) {
+            toast(e.message, 'error');
+          }
         });
       });
     }
     document.getElementById('walletSearch').addEventListener('input', renderWallets);
 
-    // ---------- Issue Points ----------
+    /* ---------- Issue Points ---------- */
     document.getElementById('btnIssue').addEventListener('click', async () => {
-      const walletId = document.getElementById('issueWallet').value.trim();
+      const walletId = document.getElementById('issueWallet').value.trim().toUpperCase();
       const amount = Number(document.getElementById('issueAmount').value);
       const type = document.getElementById('issueType').value;
       const note = document.getElementById('issueNote').value.trim();
@@ -725,7 +737,7 @@
       }
     });
 
-    // ---------- Config ----------
+    /* ---------- Config ---------- */
     async function loadConfig() {
       try {
         const d = await db.collection('config').doc('global').get();
@@ -750,7 +762,7 @@
       } catch (e) { toast(e.message, 'error'); }
     });
 
-    // ---------- Logs ----------
+    /* ---------- Logs ---------- */
     async function loadLogs() {
       const wrap = document.getElementById('logsList');
       const filter = document.getElementById('logShopFilter').value;
@@ -785,13 +797,14 @@
         wrap.innerHTML = `<div class="text-red-400 text-sm text-center py-8">${e.message}</div>`;
       }
     }
-
     document.getElementById('btnReloadLogs').addEventListener('click', loadLogs);
 
     async function populateShopFilter() {
       try {
         const snap = await db.collection('config').doc('integrations').collection('list').get();
         const sel = document.getElementById('logShopFilter');
+        // clear existing (except first "All")
+        while (sel.options.length > 1) sel.remove(1);
         snap.docs.forEach((d) => {
           const o = document.createElement('option');
           o.value = d.id;
@@ -802,29 +815,42 @@
     }
     document.getElementById('logShopFilter').addEventListener('change', loadLogs);
 
-    // ---------- Boot ----------
+    /* ---------- Boot ---------- */
     (async () => {
-      const user = await requireAuth();
-      if (!user) return;
-      CURRENT_ADMIN_UID = user.uid;
+      try {
+        const user = await requireAuth();
+        if (!user) return;
+        CURRENT_ADMIN_UID = user.uid;
 
-      const adoc = await db.collection('admins').doc(user.uid).get();
-      if (!adoc.exists) {
+        const adoc = await db.collection('admins').doc(user.uid).get();
+        if (!adoc.exists) {
+          document.body.innerHTML = `
+            <div class="min-h-screen flex items-center justify-center p-6">
+              <div class="card p-6 max-w-sm text-center">
+                <p class="text-3xl">🚫</p>
+                <h2 class="mt-3 font-bold text-lg">Access Denied</h2>
+                <p class="text-slate-400 text-sm mt-2">Your account is not an admin.</p>
+                <p class="text-xs text-slate-500 mt-3">UID: <span class="mono">${user.uid}</span></p>
+                <a href="dashboard.html" class="btn-primary inline-block mt-4 px-4 py-2 rounded-lg text-sm">Back to Dashboard</a>
+              </div>
+            </div>`;
+          return;
+        }
+        document.getElementById('adminEmail').textContent = user.email || user.uid;
+        await populateShopFilter();
+        loadOverview();
+      } catch (e) {
+        console.error('Admin boot error:', e);
         document.body.innerHTML = `
           <div class="min-h-screen flex items-center justify-center p-6">
             <div class="card p-6 max-w-sm text-center">
-              <p class="text-3xl">🚫</p>
-              <h2 class="mt-3 font-bold text-lg">Access Denied</h2>
-              <p class="text-slate-400 text-sm mt-2">Your account is not an admin.</p>
-              <p class="text-xs text-slate-500 mt-3">UID: <span class="mono">${user.uid}</span></p>
-              <a href="dashboard.html" class="btn-primary inline-block mt-4 px-4 py-2 rounded-lg text-sm">Back to Dashboard</a>
+              <p class="text-3xl">⚠️</p>
+              <h2 class="mt-3 font-bold text-lg">Load failed</h2>
+              <p class="text-slate-400 text-sm mt-2">${e.message}</p>
+              <a href="dashboard.html" class="btn-primary inline-block mt-4 px-4 py-2 rounded-lg text-sm">Back</a>
             </div>
           </div>`;
-        return;
       }
-      document.getElementById('adminEmail').textContent = user.email || user.uid;
-      await populateShopFilter();
-      loadOverview();
     })();
   </script>
 </body>
