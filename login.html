@@ -7,9 +7,9 @@
   <title>Login · P2P Wallet</title>
   <link rel="manifest" href="manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="common.js"></script>
 </head>
@@ -48,10 +48,11 @@
       </div>
 
       <!-- Email + Password -->
-      <form id="formEmail" class="space-y-3">
-        <input id="email" type="email" placeholder="Email" required
+      <form id="formEmail" class="space-y-3" autocomplete="on">
+        <input id="email" type="email" placeholder="Email" required autocomplete="email"
           class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 transition" />
-        <input id="password" type="password" placeholder="Password" minlength="6" required
+        <input id="password" type="password" placeholder="Password (min 6 chars)" minlength="6" required
+          autocomplete="current-password"
           class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 transition" />
 
         <button id="btnEmail" type="submit"
@@ -65,7 +66,6 @@
       </button>
     </div>
 
-    <!-- Demo admin info -->
     <div class="mt-6 text-center text-xs text-slate-500 leading-relaxed">
       <p>First time? Enter email + password (min 6 chars).</p>
       <p class="mt-1">We'll auto-create your account & wallet.</p>
@@ -73,82 +73,195 @@
   </div>
 
   <script>
+    /* ============================================================
+     * login.html — Email/Password + Google sign-in
+     * Handles auth/invalid-credential (new Firebase behavior)
+     * ============================================================ */
+
     const $email = document.getElementById('email');
     const $password = document.getElementById('password');
+    const $btnEmail = document.getElementById('btnEmail');
 
+    /* ---------- Main sign-in / sign-up flow ---------- */
     async function doSignIn(email, password) {
       try {
+        // Attempt sign-in
         await auth.signInWithEmailAndPassword(email, password);
-      } catch (e) {
-        if (e.code === 'auth/user-not-found') {
-          // auto sign-up
-          await auth.createUserWithEmailAndPassword(email, password);
-        } else {
-          throw e;
+        console.log('[login] signed in');
+        return { created: false };
+      } catch (err) {
+        console.log('[login] sign-in error:', err.code);
+
+        // New Firebase returns `invalid-credential` for BOTH:
+        //   1. user not found
+        //   2. wrong password
+        // So we try to create the account. If it fails with
+        // `email-already-in-use`, then the user exists → wrong password.
+        if (
+          err.code === 'auth/user-not-found' ||
+          err.code === 'auth/invalid-credential' ||
+          err.code === 'auth/invalid-login-credentials'
+        ) {
+          try {
+            await auth.createUserWithEmailAndPassword(email, password);
+            console.log('[login] account created');
+            return { created: true };
+          } catch (createErr) {
+            console.log('[login] create error:', createErr.code);
+
+            if (createErr.code === 'auth/email-already-in-use') {
+              // User exists but password is wrong
+              const e = new Error('Incorrect password. Please try again or reset it.');
+              e.code = 'auth/wrong-password';
+              throw e;
+            }
+            if (createErr.code === 'auth/weak-password') {
+              const e = new Error('Password too weak. Use at least 6 characters.');
+              e.code = createErr.code;
+              throw e;
+            }
+            if (createErr.code === 'auth/invalid-email') {
+              const e = new Error('Invalid email address.');
+              e.code = createErr.code;
+              throw e;
+            }
+            throw createErr;
+          }
         }
-      }
-      const user = auth.currentUser;
-      if (user && !user.displayName) {
-        await user.updateProfile({ displayName: email.split('@')[0] });
+
+        // Other error codes — re-throw with friendly messages
+        throw err;
       }
     }
 
+    /* ---------- Friendlier error messages ---------- */
+    function friendlyError(e) {
+      const map = {
+        'auth/invalid-email': 'Invalid email address.',
+        'auth/user-disabled': 'This account has been disabled.',
+        'auth/wrong-password': 'Incorrect password. Try again or reset it.',
+        'auth/weak-password': 'Password must be at least 6 characters.',
+        'auth/email-already-in-use': 'This email is already registered.',
+        'auth/too-many-requests': 'Too many attempts. Please wait a few minutes.',
+        'auth/network-request-failed': 'Network error. Check your connection.',
+        'auth/operation-not-allowed': 'Email/Password sign-in is not enabled. Contact admin.',
+        'auth/invalid-credential': 'Invalid credentials. Check email and password.',
+        'auth/popup-blocked': 'Popup was blocked. Allow popups and try again.',
+        'auth/popup-closed-by-user': 'Google sign-in cancelled.',
+        'auth/cancelled-popup-request': 'Another sign-in is in progress. Please wait.',
+        'auth/unauthorized-domain': 'This domain is not authorized. Contact admin.',
+      };
+      return map[e.code] || e.message || 'Sign-in failed. Please try again.';
+    }
+
+    /* ---------- Email form submit ---------- */
+    document.getElementById('formEmail').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+
+      const email = $email.value.trim().toLowerCase();
+      const password = $password.value;
+
+      if (!email || !password) {
+        toast('Enter email and password', 'error');
+        return;
+      }
+      if (password.length < 6) {
+        toast('Password must be at least 6 characters', 'error');
+        return;
+      }
+
+      $btnEmail.disabled = true;
+      $btnEmail.textContent = 'Please wait…';
+
+      try {
+        const result = await doSignIn(email, password);
+        const user = auth.currentUser;
+
+        // Set displayName on first sign-up
+        if (user && !user.displayName) {
+          try {
+            await user.updateProfile({ displayName: email.split('@')[0] });
+          } catch {}
+        }
+
+        toast(result.created ? 'Account created!' : 'Welcome back!', 'success', 1500);
+
+        // Small delay so user sees toast
+        setTimeout(() => {
+          const next = new URLSearchParams(location.search).get('next');
+          location.replace(next ? decodeURIComponent(next) : 'index.html');
+        }, 400);
+      } catch (e) {
+        console.error('[login] failed:', e);
+        toast(friendlyError(e), 'error', 4000);
+        $btnEmail.disabled = false;
+        $btnEmail.textContent = 'Sign In / Sign Up';
+      }
+    });
+
+    /* ---------- Google sign-in ---------- */
     document.getElementById('btnGoogle').addEventListener('click', async () => {
+      const btn = document.getElementById('btnGoogle');
+      btn.disabled = true;
       try {
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         await auth.signInWithPopup(provider);
-        location.replace('index.html');
+        toast('Welcome!', 'success', 1500);
+        setTimeout(() => {
+          const next = new URLSearchParams(location.search).get('next');
+          location.replace(next ? decodeURIComponent(next) : 'index.html');
+        }, 400);
       } catch (e) {
-        if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user') {
+        console.error('[login] google error:', e);
+        if (e.code === 'auth/popup-blocked') {
+          // Try redirect flow
           try {
             await auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+            return;
           } catch (e2) {
-            toast('Google sign-in failed: ' + e2.message, 'error');
+            toast(friendlyError(e2), 'error', 4000);
           }
         } else {
-          toast(e.message, 'error');
+          toast(friendlyError(e), 'error', 4000);
         }
-      }
-    });
-
-    document.getElementById('formEmail').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const email = $email.value.trim().toLowerCase();
-      const password = $password.value;
-      const btn = document.getElementById('btnEmail');
-      btn.disabled = true;
-      btn.textContent = 'Please wait…';
-      try {
-        await doSignIn(email, password);
-        location.replace('index.html');
-      } catch (e) {
-        toast(e.message || 'Login failed', 'error');
         btn.disabled = false;
-        btn.textContent = 'Sign In / Sign Up';
       }
     });
 
+    /* ---------- Forgot password ---------- */
     document.getElementById('btnForgot').addEventListener('click', async () => {
-      const email = prompt('Enter your email for reset link:');
+      const email = prompt('Enter your email for reset link:', $email.value.trim());
       if (!email) return;
       try {
-        await auth.sendPasswordResetEmail(email);
+        await auth.sendPasswordResetEmail(email.trim().toLowerCase());
         toast('Reset link sent! Check your inbox.', 'success', 4000);
       } catch (e) {
-        toast(e.message, 'error');
+        toast(friendlyError(e), 'error', 4000);
       }
     });
 
-    // Handle Google redirect result
-    auth.getRedirectResult().then((res) => {
-      if (res && res.user) location.replace('index.html');
-    }).catch(() => {});
+    /* ---------- Handle Google redirect result ---------- */
+    auth.getRedirectResult()
+      .then((res) => {
+        if (res && res.user) {
+          const next = new URLSearchParams(location.search).get('next');
+          location.replace(next ? decodeURIComponent(next) : 'index.html');
+        }
+      })
+      .catch((e) => {
+        if (e && e.code) toast(friendlyError(e), 'error');
+      });
 
-    // If already signed in, bounce
+    /* ---------- Already signed in? bounce ---------- */
     auth.onAuthStateChanged((u) => {
-      if (u) location.replace('index.html');
+      if (u) {
+        const next = new URLSearchParams(location.search).get('next');
+        location.replace(next ? decodeURIComponent(next) : 'index.html');
+      }
     });
+
+    console.log('[login] ready');
   </script>
 </body>
 </html>
