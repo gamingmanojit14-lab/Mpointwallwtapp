@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Receive · P2P Wallet</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+</head>
+<body class="min-h-screen pb-24">
+
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+    <div class="max-w-md mx-auto flex items-center gap-3 px-4 py-3">
+      <a href="dashboard.html" class="text-slate-400 hover:text-orange-400">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+      </a>
+      <h1 class="font-bold text-lg">Receive Points</h1>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 pt-4 space-y-5">
+
+    <!-- QR Card -->
+    <section class="card p-6 text-center">
+      <p class="text-slate-400 text-sm mb-4">Scan this QR to send me Points</p>
+      <div class="inline-block p-4 bg-white rounded-2xl shadow-2xl">
+        <canvas id="qrCanvas" width="240" height="240"></canvas>
+      </div>
+      <div class="mt-5">
+        <p class="text-xs text-slate-500 uppercase tracking-wider">Your Wallet ID</p>
+        <div class="mt-2 flex items-center justify-center gap-2">
+          <span id="walletId" class="mono text-lg font-bold text-orange-400">—</span>
+          <button id="copyId" class="text-slate-400 hover:text-orange-400" title="Copy">📋</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Name -->
+    <section class="card p-4 flex items-center justify-between">
+      <div>
+        <p class="text-slate-400 text-xs uppercase tracking-wider">Account Name</p>
+        <p id="myName" class="font-medium mt-1">—</p>
+      </div>
+      <a href="profile.html" class="text-orange-400 text-sm">Edit</a>
+    </section>
+
+    <!-- Share options -->
+    <section class="grid grid-cols-2 gap-3">
+      <button id="btnShare" class="card p-4 flex flex-col items-center gap-2 hover:border-orange-500 transition">
+        <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <path d="M8.6 13.5l6.8 3.9M15.4 6.6L8.6 10.5"/>
+        </svg>
+        <span class="text-sm font-medium">Share</span>
+      </button>
+      <button id="btnDownload" class="card p-4 flex flex-col items-center gap-2 hover:border-orange-500 transition">
+        <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        <span class="text-sm font-medium">Download</span>
+      </button>
+    </section>
+
+    <!-- Info -->
+    <section class="card p-4 text-xs text-slate-400 space-y-2">
+      <p>💡 <b class="text-slate-300">Tip:</b> The sender can enter your Wallet ID manually, or scan this QR.</p>
+      <p>🔒 Only you can spend Points from this wallet.</p>
+      <p>⚡ Transfers are instant and irreversible.</p>
+    </section>
+  </main>
+
+  <script>
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      const walletId = await getOwnWalletId();
+      if (!walletId) { toast('No wallet linked', 'error'); return; }
+
+      document.getElementById('walletId').textContent = walletId;
+
+      const udoc = await db.collection('users').doc(user.uid).get();
+      document.getElementById('myName').textContent = (udoc.exists && udoc.data().name) || user.displayName || '—';
+
+      await QRCode.toCanvas(document.getElementById('qrCanvas'), walletId, {
+        width: 240, margin: 1, color: { dark: '#0f172a', light: '#ffffff' },
+      });
+
+      document.getElementById('copyId').addEventListener('click', () => copyText(walletId));
+
+      document.getElementById('btnShare').addEventListener('click', async () => {
+        const text = `Send me Points on P2P Wallet.\nWallet ID: ${walletId}`;
+        if (navigator.share) {
+          try { await navigator.share({ title: 'My P2P Wallet ID', text }); } catch {}
+        } else {
+          copyText(text);
+        }
+      });
+
+      document.getElementById('btnDownload').addEventListener('click', () => {
+        const canvas = document.getElementById('qrCanvas');
+        const link = document.createElement('a');
+        link.download = `p2p-wallet-${walletId}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        toast('QR downloaded', 'success');
+      });
+    })();
+  </script>
+</body>
+</html>
