@@ -14,4 +14,4 @@ window.FIREBASE_CONFIG = {
 };
 
 // Render backend base URL
-window.API_BASE_URL = "https://mpointwallwt-isxw.onrender.com";
+window.API_BASE_URL = "https://mpointwallwt-1new.onrender.com";
