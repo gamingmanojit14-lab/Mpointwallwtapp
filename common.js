@@ -20,7 +20,7 @@ if (!firebase.apps.length) {
 const auth = firebase.auth();
 const db = firebase.firestore();
 const FV = firebase.firestore.FieldValue;
-const API_BASE_URL = window.API_BASE_URL || 'https://mpointwallwt-1.onrender.com';
+const API_BASE_URL = window.API_BASE_URL || 'https://mpointwallwt-isxw.onrender.com';
 
 /* ============================================================
  * AUTH HELPERS
