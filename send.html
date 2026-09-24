@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Send · P2P Wallet</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+</head>
+<body class="min-h-screen pb-24">
+
+  <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+    <div class="max-w-md mx-auto flex items-center gap-3 px-4 py-3">
+      <a href="dashboard.html" class="text-slate-400 hover:text-orange-400">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+      </a>
+      <h1 class="font-bold text-lg">Send Points</h1>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 pt-4 space-y-4">
+
+    <!-- Balance -->
+    <div class="card p-4 flex items-center justify-between">
+      <span class="text-slate-400 text-sm">Available</span>
+      <span><span id="myBalance" class="mono font-bold text-orange-500">0</span> <span class="text-xs text-slate-400">PTS</span></span>
+    </div>
+
+    <!-- Recipient Input -->
+    <div class="card p-4 space-y-3">
+      <label class="text-sm font-medium text-slate-300">Send to</label>
+
+      <div class="flex gap-2">
+        <input id="toInput" type="text" placeholder="Wallet ID (W-XXXXXX) / Phone / Email"
+          class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 text-sm mono" />
+        <button id="btnScan" class="bg-slate-800 border border-slate-700 rounded-xl px-3 hover:border-orange-500 transition">
+          <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M3 12h18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div id="recipientInfo" class="hidden text-xs text-green-400 bg-green-500/10 rounded-lg p-2 mono"></div>
+      <div id="recipientError" class="hidden text-xs text-red-400 bg-red-500/10 rounded-lg p-2"></div>
+    </div>
+
+    <!-- QR scanner inline (hidden by default) -->
+    <div id="scanWrap" class="hidden card p-3">
+      <div id="qrReader" class="rounded-xl overflow-hidden"></div>
+      <button id="btnStopScan" class="mt-3 w-full text-sm text-slate-400 hover:text-red-400">Stop Scanner</button>
+    </div>
+
+    <!-- Amount -->
+    <div class="card p-4 space-y-3">
+      <label class="text-sm font-medium text-slate-300">Amount</label>
+      <div class="relative">
+        <input id="amount" type="number" min="1" step="0.01" placeholder="0"
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-4 text-2xl mono font-bold focus:outline-none focus:border-orange-500" />
+        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-orange-500 font-semibold">PTS</span>
+      </div>
+      <div class="flex gap-2">
+        <button data-amt="50" class="quickAmt flex-1 bg-slate-800 hover:bg-slate-700 rounded-lg py-2 text-sm">50</button>
+        <button data-amt="100" class="quickAmt flex-1 bg-slate-800 hover:bg-slate-700 rounded-lg py-2 text-sm">100</button>
+        <button data-amt="500" class="quickAmt flex-1 bg-slate-800 hover:bg-slate-700 rounded-lg py-2 text-sm">500</button>
+        <button data-amt="1000" class="quickAmt flex-1 bg-slate-800 hover:bg-slate-700 rounded-lg py-2 text-sm">1000</button>
+      </div>
+    </div>
+
+    <!-- Note -->
+    <div class="card p-4">
+      <label class="text-sm font-medium text-slate-300 block mb-2">Note (optional)</label>
+      <input id="note" type="text" maxlength="80" placeholder="e.g. Lunch split"
+        class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500" />
+    </div>
+
+    <!-- Submit -->
+    <button id="btnSend" class="btn-primary w-full py-4 rounded-2xl font-semibold text-lg transition disabled:opacity-50" disabled>
+      Send Points
+    </button>
+  </main>
+
+  <!-- PIN Modal -->
+  <div id="pinModal" class="hidden fixed inset-0 z-50 bg-black/70 items-center justify-center p-4">
+    <div class="card p-6 w-full max-w-sm">
+      <h3 class="font-bold text-lg mb-2">Confirm with PIN</h3>
+      <p class="text-sm text-slate-400 mb-4">Enter your 4–6 digit PIN to authorize this transfer.</p>
+      <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••"
+        class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-4 text-center text-2xl mono tracking-widest focus:outline-none focus:border-orange-500" />
+      <div id="pinError" class="hidden text-red-400 text-xs mt-2"></div>
+      <div class="flex gap-2 mt-4">
+        <button id="pinCancel" class="flex-1 bg-slate-800 hover:bg-slate-700 rounded-xl py-3 text-sm">Cancel</button>
+        <button id="pinConfirm" class="flex-1 btn-primary rounded-xl py-3 text-sm font-semibold">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let myWalletId = null;
+    let myBalance = 0;
+    let resolvedRecipient = null; // {walletId, name}
+    let scanner = null;
+
+    // --- Helpers ---
+    async function sha256Hex(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+
+    async function resolveRecipient(input) {
+      const q = (input || '').trim();
+      if (!q) throw new Error('Enter recipient');
+
+      // Direct wallet ID
+      if (/^[A-Z]-[A-Z0-9]{4,10}$/i.test(q)) {
+        const w = await getWallet(q.toUpperCase());
+        if (!w) throw new Error('Wallet not found: ' + q);
+        if (w.isMerchant) throw new Error('Cannot send to a merchant wallet directly');
+        if (w.walletId === myWalletId) throw new Error('Cannot send to yourself');
+        return { walletId: w.walletId, name: w.name || w.walletId };
+      }
+
+      // Email lookup
+      if (q.includes('@')) {
+        const idx = await db.collection('walletIndex').doc('email:' + q.toLowerCase()).get();
+        if (!idx.exists) throw new Error('No wallet linked to that email');
+        const w = await getWallet(idx.data().walletId);
+        if (!w) throw new Error('Linked wallet missing');
+        if (w.walletId === myWalletId) throw new Error('Cannot send to yourself');
+        return { walletId: w.walletId, name: w.name || w.walletId };
+      }
+
+      // Phone lookup
+      const phoneKey = 'phone:' + q.replace(/\D/g, '');
+      const idx = await db.collection('walletIndex').doc(phoneKey).get();
+      if (!idx.exists) throw new Error('No wallet linked to that phone');
+      const w = await getWallet(idx.data().walletId);
+      if (!w) throw new Error('Linked wallet missing');
+      if (w.walletId === myWalletId) throw new Error('Cannot send to yourself');
+      return { walletId: w.walletId, name: w.name || w.walletId };
+    }
+
+    // --- Balance live ---
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      myWalletId = await getOwnWalletId();
+      if (!myWalletId) { toast('No wallet linked', 'error'); return; }
+
+      db.collection('wallets').doc(myWalletId).onSnapshot((d) => {
+        if (!d.exists) return;
+        myBalance = Number(d.data().balance || 0);
+        document.getElementById('myBalance').textContent = fmtPoints(myBalance);
+        validate();
+      });
+    })();
+
+    // --- Recipient input ---
+    const toInput = document.getElementById('toInput');
+    const recipientInfo = document.getElementById('recipientInfo');
+    const recipientError = document.getElementById('recipientError');
+
+    toInput.addEventListener('input', async () => {
+      resolvedRecipient = null;
+      recipientInfo.classList.add('hidden');
+      recipientError.classList.add('hidden');
+      const v = toInput.value.trim();
+      if (v.length < 3) { validate(); return; }
+      try {
+        const r = await resolveRecipient(v);
+        resolvedRecipient = r;
+        recipientInfo.textContent = `✓ ${r.name} · ${r.walletId}`;
+        recipientInfo.classList.remove('hidden');
+      } catch (e) {
+        // don't spam errors while typing
+      }
+      validate();
+    });
+
+    // --- Quick amounts ---
+    document.querySelectorAll('.quickAmt').forEach(b => {
+      b.addEventListener('click', () => {
+        document.getElementById('amount').value = b.dataset.amt;
+        validate();
+      });
+    });
+
+    // --- Amount ---
+    document.getElementById('amount').addEventListener('input', validate);
+
+    function validate() {
+      const amt = Number(document.getElementById('amount').value);
+      const btn = document.getElementById('btnSend');
+      const ok = resolvedRecipient && amt > 0 && amt <= myBalance;
+      btn.disabled = !ok;
+    }
+
+    // --- QR scan ---
+    const scanWrap = document.getElementById('scanWrap');
+    document.getElementById('btnScan').addEventListener('click', async () => {
+      if (scanner) return;
+      scanWrap.classList.remove('hidden');
+      try {
+        scanner = new Html5Qrcode('qrReader');
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 220, height: 220 } },
+          (text) => {
+            toInput.value = text.trim();
+            toInput.dispatchEvent(new Event('input'));
+            stopScan();
+            haptic(30);
+            toast('QR scanned', 'success');
+          },
+          () => {}
+        );
+      } catch (e) {
+        toast('Camera error: ' + e.message, 'error');
+        scanWrap.classList.add('hidden');
+        scanner = null;
+      }
+    });
+
+    async function stopScan() {
+      if (!scanner) return;
+      try { await scanner.stop(); await scanner.clear(); } catch {}
+      scanner = null;
+      scanWrap.classList.add('hidden');
+    }
+    document.getElementById('btnStopScan').addEventListener('click', stopScan);
+
+    // --- Send flow ---
+    document.getElementById('btnSend').addEventListener('click', async () => {
+      if (!resolvedRecipient) return;
+      const amt = Number(document.getElementById('amount').value);
+      if (!(amt > 0)) return;
+      if (amt > myBalance) return toast('Insufficient balance', 'error');
+      openModal('pinModal');
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinError').classList.add('hidden');
+      setTimeout(() => document.getElementById('pinInput').focus(), 100);
+    });
+
+    document.getElementById('pinCancel').addEventListener('click', () => closeModal('pinModal'));
+    document.getElementById('pinConfirm').addEventListener('click', async () => {
+      await doSend();
+    });
+    document.getElementById('pinInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doSend();
+    });
+
+    async function doSend() {
+      const pin = document.getElementById('pinInput').value.trim();
+      const pinErr = document.getElementById('pinError');
+      pinErr.classList.add('hidden');
+
+      if (!pin || pin.length < 4) {
+        pinErr.textContent = 'PIN must be 4–6 digits';
+        pinErr.classList.remove('hidden');
+        return;
+      }
+
+      const user = auth.currentUser;
+      const udoc = await db.collection('users').doc(user.uid).get();
+      const stored = udoc.exists ? (udoc.data().pinHash || '') : '';
+      const pinHash = await sha256Hex(pin);
+
+      if (!stored) {
+        // First time — set PIN
+        if (!confirm('No PIN set. Set this as your PIN?')) return;
+        await db.collection('users').doc(user.uid).set({ pinHash, updatedAt: FV.serverTimestamp() }, { merge: true });
+      } else if (stored !== pinHash) {
+        pinErr.textContent = 'Incorrect PIN';
+        pinErr.classList.remove('hidden');
+        haptic(80);
+        return;
+      }
+
+      closeModal('pinModal');
+
+      const amt = Number(document.getElementById('amount').value);
+      const note = document.getElementById('note').value.trim();
+
+      // Disable UI
+      const btn = document.getElementById('btnSend');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+
+      try {
+        // Get fresh ID token
+        const idToken = await user.getIdToken(true);
+
+        // Call backend P2P transfer endpoint
+        const res = await fetch(`${API_BASE_URL}/api/p2pTransfer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+          body: JSON.stringify({
+            toWalletId: resolvedRecipient.walletId,
+            amount: amt,
+            note,
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Transfer failed');
+
+        toast(`Sent ${fmtPoints(amt)} to ${resolvedRecipient.name}`, 'success', 4000);
+        haptic(50);
+
+        // Reset
+        document.getElementById('amount').value = '';
+        document.getElementById('note').value = '';
+        toInput.value = '';
+        resolvedRecipient = null;
+        recipientInfo.classList.add('hidden');
+
+        setTimeout(() => location.replace('dashboard.html'), 1200);
+      } catch (e) {
+        toast(e.message, 'error', 4000);
+        btn.disabled = false;
+        btn.textContent = 'Send Points';
+      }
+    }
+  </script>
+</body>
+</html>
