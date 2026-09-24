@@ -7,10 +7,9 @@
   <title>Receive · P2P Wallet</title>
   <link rel="manifest" href="manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="common.js"></script>
 </head>
@@ -30,9 +29,22 @@
     <!-- QR Card -->
     <section class="card p-6 text-center">
       <p class="text-slate-400 text-sm mb-4">Scan this QR to send me Points</p>
-      <div class="inline-block p-4 bg-white rounded-2xl shadow-2xl">
-        <canvas id="qrCanvas" width="240" height="240"></canvas>
+
+      <!-- QR holder with loading + error fallback -->
+      <div class="inline-block p-4 bg-white rounded-2xl shadow-2xl relative">
+        <canvas id="qrCanvas" width="240" height="240" class="block"></canvas>
+
+        <!-- Loading overlay -->
+        <div id="qrLoading" class="absolute inset-4 flex items-center justify-center bg-white rounded-xl">
+          <div class="w-8 h-8 rounded-full border-4 border-orange-500 border-t-transparent animate-spin"></div>
+        </div>
+
+        <!-- Error overlay (only shown if QR generation fails completely) -->
+        <div id="qrError" class="hidden absolute inset-4 items-center justify-center bg-white rounded-xl">
+          <p class="text-xs text-red-500 text-center px-2">QR unavailable<br/><span class="mono text-slate-700" id="qrErrorId"></span></p>
+        </div>
       </div>
+
       <div class="mt-5">
         <p class="text-xs text-slate-500 uppercase tracking-wider">Your Wallet ID</p>
         <div class="mt-2 flex items-center justify-center gap-2">
@@ -42,7 +54,7 @@
       </div>
     </section>
 
-    <!-- Name -->
+    <!-- Account Name -->
     <section class="card p-4 flex items-center justify-between">
       <div>
         <p class="text-slate-400 text-xs uppercase tracking-wider">Account Name</p>
@@ -51,7 +63,7 @@
       <a href="profile.html" class="text-orange-400 text-sm">Edit</a>
     </section>
 
-    <!-- Share options -->
+    <!-- Share / Download -->
     <section class="grid grid-cols-2 gap-3">
       <button id="btnShare" class="card p-4 flex flex-col items-center gap-2 hover:border-orange-500 transition">
         <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -68,7 +80,7 @@
       </button>
     </section>
 
-    <!-- Info -->
+    <!-- Tips -->
     <section class="card p-4 text-xs text-slate-400 space-y-2">
       <p>💡 <b class="text-slate-300">Tip:</b> The sender can enter your Wallet ID manually, or scan this QR.</p>
       <p>🔒 Only you can spend Points from this wallet.</p>
@@ -76,42 +88,212 @@
     </section>
   </main>
 
+  <!-- Bottom Nav -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-slate-800 z-30">
+    <div class="max-w-md mx-auto grid grid-cols-5 text-xs">
+      <a href="dashboard.html" class="flex flex-col items-center gap-1 py-3 text-slate-400 hover:text-orange-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+        Home
+      </a>
+      <a href="send.html" class="flex flex-col items-center gap-1 py-3 text-slate-400 hover:text-orange-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19V5m0 0l-7 7m7-7l7 7"/></svg>
+        Send
+      </a>
+      <a href="receive.html" class="flex flex-col items-center gap-1 py-3 text-orange-500">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14m0 0l7-7m-7 7l-7-7"/></svg>
+        Receive
+      </a>
+      <a href="history.html" class="flex flex-col items-center gap-1 py-3 text-slate-400 hover:text-orange-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        History
+      </a>
+      <a href="profile.html" class="flex flex-col items-center gap-1 py-3 text-slate-400 hover:text-orange-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+        Profile
+      </a>
+    </div>
+  </nav>
+
   <script>
-    (async () => {
-      const user = await requireAuth();
-      if (!user) return;
-      const walletId = await getOwnWalletId();
-      if (!walletId) { toast('No wallet linked', 'error'); return; }
+    /* ============================================================
+     * receive.html — Wallet ID QR display
+     * Uses built-in QRGen (from common.js) — no external library
+     * ============================================================ */
 
-      document.getElementById('walletId').textContent = walletId;
+    let CURRENT_WALLET_ID = null;
 
-      const udoc = await db.collection('users').doc(user.uid).get();
-      document.getElementById('myName').textContent = (udoc.exists && udoc.data().name) || user.displayName || '—';
+    /* ---------- Overlays ---------- */
+    function hideLoading() {
+      const el = document.getElementById('qrLoading');
+      if (el) el.style.display = 'none';
+    }
+    function showError(walletId) {
+      hideLoading();
+      document.getElementById('qrErrorId').textContent = walletId || '';
+      const el = document.getElementById('qrError');
+      el.classList.remove('hidden');
+      el.classList.add('flex');
+    }
 
-      await QRCode.toCanvas(document.getElementById('qrCanvas'), walletId, {
-        width: 240, margin: 1, color: { dark: '#0f172a', light: '#ffffff' },
-      });
+    /* ---------- Render QR with built-in generator + API fallback ---------- */
+    async function renderQR(walletId) {
+      const canvas = document.getElementById('qrCanvas');
 
-      document.getElementById('copyId').addEventListener('click', () => copyText(walletId));
-
-      document.getElementById('btnShare').addEventListener('click', async () => {
-        const text = `Send me Points on P2P Wallet.\nWallet ID: ${walletId}`;
-        if (navigator.share) {
-          try { await navigator.share({ title: 'My P2P Wallet ID', text }); } catch {}
-        } else {
-          copyText(text);
+      // Method 1: Built-in QRGen (no CDN, always works)
+      if (window.QRGen && typeof window.QRGen.renderToCanvas === 'function') {
+        try {
+          window.QRGen.renderToCanvas(canvas, walletId, {
+            size: 240,
+            margin: 4,
+            darkColor: '#0f172a',
+            lightColor: '#ffffff',
+          });
+          hideLoading();
+          console.log('[receive] QR rendered via built-in generator:', walletId);
+          return;
+        } catch (e) {
+          console.warn('[receive] built-in QR failed:', e.message);
         }
-      });
+      } else {
+        console.warn('[receive] QRGen not available on window');
+      }
 
-      document.getElementById('btnDownload').addEventListener('click', () => {
-        const canvas = document.getElementById('qrCanvas');
-        const link = document.createElement('a');
-        link.download = `p2p-wallet-${walletId}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        toast('QR downloaded', 'success');
-      });
+      // Method 2: Public API fallback (only if built-in fails for some reason)
+      try {
+        const url = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=4&data='
+          + encodeURIComponent(walletId);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = url;
+        });
+        const ctx = canvas.getContext('2d');
+        canvas.width = 240;
+        canvas.height = 240;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 240, 240);
+        ctx.drawImage(img, 0, 0, 240, 240);
+        hideLoading();
+        console.log('[receive] QR rendered via API fallback');
+        return;
+      } catch (e) {
+        console.warn('[receive] API fallback failed:', e.message);
+      }
+
+      // Method 3: Last resort — show text
+      showError(walletId);
+    }
+
+    /* ---------- Boot ---------- */
+    (async () => {
+      try {
+        const user = await requireAuth();
+        if (!user) return;
+
+        const walletId = await getOwnWalletId();
+        if (!walletId) {
+          hideLoading();
+          toast('No wallet linked to your account', 'error', 4000);
+          return;
+        }
+        CURRENT_WALLET_ID = walletId;
+
+        // Show wallet ID immediately
+        document.getElementById('walletId').textContent = walletId;
+
+        // Load display name
+        try {
+          const udoc = await db.collection('users').doc(user.uid).get();
+          const name = (udoc.exists && udoc.data().name)
+            || user.displayName
+            || (user.email || '').split('@')[0]
+            || '—';
+          document.getElementById('myName').textContent = name;
+        } catch (e) {
+          console.warn('User doc load failed:', e.message);
+          document.getElementById('myName').textContent = user.displayName || '—';
+        }
+
+        // Render QR
+        await renderQR(walletId);
+
+        /* ---------- Copy wallet ID ---------- */
+        document.getElementById('copyId').addEventListener('click', () => {
+          copyText(walletId);
+        });
+
+        /* ---------- Share ---------- */
+        document.getElementById('btnShare').addEventListener('click', async () => {
+          const text = `Send me Points on P2P Wallet.\nWallet ID: ${walletId}`;
+          if (navigator.share) {
+            try {
+              await navigator.share({ title: 'My P2P Wallet ID', text });
+            } catch (e) {
+              // user cancelled — silent
+            }
+          } else {
+            copyText(text);
+          }
+        });
+
+        /* ---------- Download PNG ---------- */
+        document.getElementById('btnDownload').addEventListener('click', () => {
+          try {
+            let dataUrl;
+
+            // Prefer built-in generator at high resolution
+            if (window.QRGen && typeof window.QRGen.renderToDataURL === 'function') {
+              dataUrl = window.QRGen.renderToDataURL(walletId, {
+                size: 600,
+                margin: 8,
+                darkColor: '#0f172a',
+                lightColor: '#ffffff',
+              });
+            } else {
+              // Fallback: use on-screen canvas
+              dataUrl = document.getElementById('qrCanvas').toDataURL('image/png');
+            }
+
+            const link = document.createElement('a');
+            link.download = `p2p-wallet-${walletId}.png`;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            toast('QR downloaded', 'success');
+            haptic(30);
+          } catch (e) {
+            console.error('[receive] download failed:', e);
+            toast('Download failed: ' + e.message, 'error');
+          }
+        });
+
+      } catch (e) {
+        console.error('[receive] boot error:', e);
+        hideLoading();
+        toast('Failed to load: ' + e.message, 'error', 4000);
+      }
     })();
+
+    /* ---------- Safety timeout: hide loading spinner after 5s max ---------- */
+    setTimeout(() => {
+      const el = document.getElementById('qrLoading');
+      if (el && el.style.display !== 'none') {
+        // If still loading after 5s, check if canvas has content
+        const canvas = document.getElementById('qrCanvas');
+        const ctx = canvas.getContext('2d');
+        const data = ctx.getImageData(0, 0, 240, 240).data;
+        let hasDark = false;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] < 100) { hasDark = true; break; }
+        }
+        if (hasDark) hideLoading();
+        else showError(CURRENT_WALLET_ID || '');
+      }
+    }, 5000);
   </script>
 </body>
 </html>
