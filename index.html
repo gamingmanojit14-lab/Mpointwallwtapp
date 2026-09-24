@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>P2P Wallet</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center bg-slate-900">
+  <div class="text-center">
+    <div class="w-16 h-16 mx-auto rounded-full border-4 border-orange-500 border-t-transparent animate-spin"></div>
+    <p class="mt-4 text-slate-400">Loading…</p>
+  </div>
+
+  <script>
+    (async () => {
+      try {
+        // Wait for Firebase auth to resolve
+        await new Promise((resolve) => {
+          const unsub = firebase.auth().onAuthStateChanged((u) => { unsub(); resolve(u); });
+        });
+
+        const user = firebase.auth().currentUser;
+        if (!user) {
+          location.replace('login.html');
+          return;
+        }
+
+        // Ensure user doc + wallet exist (first-time bootstrap)
+        const uref = db.collection('users').doc(user.uid);
+        const udoc = await uref.get();
+
+        if (!udoc.exists || !udoc.data().walletId) {
+          // Bootstrap new user
+          const walletId = generateWalletId('W-');
+          const displayName = user.displayName || (user.email || '').split('@')[0] || 'User';
+
+          await db.collection('wallets').doc(walletId).set({
+            walletId,
+            userId: user.uid,
+            name: displayName,
+            balance: 0,
+            walletStatus: 'active',
+            isMerchant: false,
+            createdAt: FV.serverTimestamp(),
+          });
+
+          await uref.set({
+            uid: user.uid,
+            name: displayName,
+            email: user.email || '',
+            walletId,
+            pinHash: '',
+            createdAt: FV.serverTimestamp(),
+            updatedAt: FV.serverTimestamp(),
+          }, { merge: true });
+
+          if (user.email) {
+            await db.collection('walletIndex').doc('email:' + user.email.toLowerCase()).set({
+              walletId, uid: user.uid, email: user.email.toLowerCase(),
+            });
+          }
+        }
+
+        // Admin redirect
+        const adminDoc = await db.collection('admins').doc(user.uid).get();
+        if (adminDoc.exists) {
+          location.replace('dashboard.html');
+        } else {
+          location.replace('dashboard.html');
+        }
+      } catch (e) {
+        console.error('Bootstrap error:', e);
+        document.body.innerHTML = `<div class="text-center p-6">
+          <p class="text-red-400 font-semibold">Initialization failed</p>
+          <p class="text-slate-400 text-sm mt-2">${e.message}</p>
+          <a href="login.html" class="mt-4 inline-block text-orange-400 underline">Try login again</a>
+        </div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
