@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Login · P2P Wallet</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+</head>
+<body class="min-h-screen flex flex-col justify-center p-6 bg-slate-900">
+
+  <div class="max-w-sm mx-auto w-full">
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-2xl shadow-orange-500/30">
+        <svg viewBox="0 0 24 24" class="w-12 h-12 text-slate-900" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3.5c.83 0 1.5.67 1.5 1.5h-3c0-.83.67-1.5 1.5-1.5zM9 9h6v2H9V9zm0 4h3v2.5h4V18H9v-5z"/>
+        </svg>
+      </div>
+      <h1 class="mt-6 text-2xl font-bold">P2P Wallet</h1>
+      <p class="text-slate-400 text-sm mt-1">Peer-to-peer points, powered by Bitcoin vibes ⚡</p>
+    </div>
+
+    <!-- Card -->
+    <div class="card p-6 space-y-4">
+      <!-- Google Sign In -->
+      <button id="btnGoogle"
+        class="w-full flex items-center justify-center gap-3 bg-white text-slate-900 font-semibold py-3 rounded-xl hover:bg-slate-100 transition">
+        <svg viewBox="0 0 48 48" class="w-5 h-5">
+          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.4 0 10.3-2.1 14-5.5l-6.5-5.5C29.4 34.7 26.8 36 24 36c-5.2 0-9.6-3.1-11.3-7.6l-6.6 5.1C9.6 39.6 16.2 44 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.5l6.5 5.5C41.9 35.7 44 30.3 44 24c0-1.2-.1-2.4-.4-3.5z"/>
+        </svg>
+        Continue with Google
+      </button>
+
+      <div class="flex items-center gap-3 text-slate-500 text-xs">
+        <div class="flex-1 h-px bg-slate-700"></div>
+        <span>OR</span>
+        <div class="flex-1 h-px bg-slate-700"></div>
+      </div>
+
+      <!-- Email + Password -->
+      <form id="formEmail" class="space-y-3">
+        <input id="email" type="email" placeholder="Email" required
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 transition" />
+        <input id="password" type="password" placeholder="Password" minlength="6" required
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 transition" />
+
+        <button id="btnEmail" type="submit"
+          class="btn-primary w-full py-3 rounded-xl transition disabled:opacity-60">
+          Sign In / Sign Up
+        </button>
+      </form>
+
+      <button id="btnForgot" class="w-full text-slate-400 text-sm hover:text-orange-400 transition">
+        Forgot password?
+      </button>
+    </div>
+
+    <!-- Demo admin info -->
+    <div class="mt-6 text-center text-xs text-slate-500 leading-relaxed">
+      <p>First time? Enter email + password (min 6 chars).</p>
+      <p class="mt-1">We'll auto-create your account & wallet.</p>
+    </div>
+  </div>
+
+  <script>
+    const $email = document.getElementById('email');
+    const $password = document.getElementById('password');
+
+    async function doSignIn(email, password) {
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (e) {
+        if (e.code === 'auth/user-not-found') {
+          // auto sign-up
+          await auth.createUserWithEmailAndPassword(email, password);
+        } else {
+          throw e;
+        }
+      }
+      const user = auth.currentUser;
+      if (user && !user.displayName) {
+        await user.updateProfile({ displayName: email.split('@')[0] });
+      }
+    }
+
+    document.getElementById('btnGoogle').addEventListener('click', async () => {
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        await auth.signInWithPopup(provider);
+        location.replace('index.html');
+      } catch (e) {
+        if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user') {
+          try {
+            await auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+          } catch (e2) {
+            toast('Google sign-in failed: ' + e2.message, 'error');
+          }
+        } else {
+          toast(e.message, 'error');
+        }
+      }
+    });
+
+    document.getElementById('formEmail').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const email = $email.value.trim().toLowerCase();
+      const password = $password.value;
+      const btn = document.getElementById('btnEmail');
+      btn.disabled = true;
+      btn.textContent = 'Please wait…';
+      try {
+        await doSignIn(email, password);
+        location.replace('index.html');
+      } catch (e) {
+        toast(e.message || 'Login failed', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign In / Sign Up';
+      }
+    });
+
+    document.getElementById('btnForgot').addEventListener('click', async () => {
+      const email = prompt('Enter your email for reset link:');
+      if (!email) return;
+      try {
+        await auth.sendPasswordResetEmail(email);
+        toast('Reset link sent! Check your inbox.', 'success', 4000);
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    });
+
+    // Handle Google redirect result
+    auth.getRedirectResult().then((res) => {
+      if (res && res.user) location.replace('index.html');
+    }).catch(() => {});
+
+    // If already signed in, bounce
+    auth.onAuthStateChanged((u) => {
+      if (u) location.replace('index.html');
+    });
+  </script>
+</body>
+</html>
